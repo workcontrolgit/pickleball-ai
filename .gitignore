@@ -20,6 +20,9 @@ obj/
 # Local config
 appsettings.Development.json
 
+# YOLO models (large binary files — download separately)
+src/PickleIQ.Infrastructure/Models/*.onnx
+
 # OS
 .DS_Store
 Thumbs.db
