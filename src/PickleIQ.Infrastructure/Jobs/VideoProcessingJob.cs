@@ -53,7 +53,8 @@ public class VideoProcessingJob(
             await db.SaveChangesAsync();
 
             var highlightPath = await highlightGenerationService.GenerateAsync(jobId, job.FilePath);
-            job.HighlightFilePath = highlightPath;
+            if (!string.IsNullOrEmpty(highlightPath))
+                job.HighlightFilePath = highlightPath;
             job.Status = VideoJobStatus.HighlightComplete;
             await db.SaveChangesAsync();
 

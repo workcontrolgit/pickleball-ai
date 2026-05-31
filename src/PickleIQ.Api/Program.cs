@@ -23,7 +23,8 @@ builder.Services.AddHangfire(config => config
     .UseRecommendedSerializerSettings()
     .UseSqlServerStorage(connectionString));
 
-builder.Services.AddHangfireServer();
+// No AddHangfireServer() here — the Web project is the sole Hangfire worker.
+// Api only needs the client for enqueuing and the dashboard.
 
 builder.Services.AddScoped<IRallyDetectionService, RallyDetectionService>();
 builder.Services.AddScoped<IHighlightGenerationService, HighlightGenerationService>();

@@ -48,4 +48,13 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+app.MapGet("/download/{jobId:guid}/highlights", async (Guid jobId, AppDbContext db) =>
+{
+    var job = await db.VideoJobs.FirstOrDefaultAsync(j => j.Id == jobId);
+    if (job is null || string.IsNullOrEmpty(job.HighlightFilePath) || !File.Exists(job.HighlightFilePath))
+        return Results.NotFound("Highlight file not available.");
+    var stream = File.OpenRead(job.HighlightFilePath);
+    return Results.File(stream, "video/mp4", $"highlights-{jobId}.mp4");
+});
+
 app.Run();

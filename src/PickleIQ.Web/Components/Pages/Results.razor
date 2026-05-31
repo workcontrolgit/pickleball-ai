@@ -100,7 +100,7 @@
     private CoachingReport? _report;
     private System.Threading.Timer? _pollTimer;
 
-    private string DownloadUrl => $"http://localhost:5000/api/download/{JobId}/highlights";
+    private string DownloadUrl => $"/download/{JobId}/highlights";
 
     protected override async Task OnInitializedAsync()
     {
