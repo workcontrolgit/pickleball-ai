@@ -23,6 +23,7 @@ public class RallyDetectionService(
     public async Task<IList<(double StartSeconds, double EndSeconds)>> DetectRalliesAsync(
         string videoPath, CancellationToken cancellationToken = default)
     {
+        FFmpegLocator.EnsureConfigured(configuration);
         logger.LogInformation("Starting rally detection for {VideoPath}", videoPath);
 
         var framesDir = Path.Combine(Path.GetTempPath(), $"pickleiq-frames-{Guid.NewGuid()}");

@@ -17,6 +17,7 @@ public class HighlightGenerationService(
 
     public async Task<string> GenerateAsync(Guid jobId, string videoPath, CancellationToken cancellationToken = default)
     {
+        FFmpegLocator.EnsureConfigured(configuration);
         logger.LogInformation("Generating highlights for job {JobId}", jobId);
 
         var segments = await db.RallySegments
