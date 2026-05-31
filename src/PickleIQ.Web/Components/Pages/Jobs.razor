@@ -57,8 +57,18 @@
                                 <a href="/results/@job.Id" class="btn btn-sm btn-outline-success me-1">View Results</a>
                                 @if (!string.IsNullOrEmpty(job.HighlightFilePath))
                                 {
-                                    <a href="/download/@job.Id/highlights" class="btn btn-sm btn-success" download>Download</a>
+                                    <a href="/download/@job.Id/highlights" class="btn btn-sm btn-success me-1" download>Download</a>
                                 }
+                                <button class="btn btn-sm btn-outline-warning me-1"
+                                        @onclick="() => RetryAsync(job.Id)"
+                                        disabled="@_retrying.Contains(job.Id)">
+                                    @(_retrying.Contains(job.Id) ? "Retrying…" : "Reprocess")
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => DeleteAsync(job.Id)"
+                                        disabled="@_deleting.Contains(job.Id)">
+                                    Delete
+                                </button>
                             }
                             else if (job.Status == VideoJobStatus.Failed)
                             {
@@ -67,7 +77,12 @@
                                         disabled="@_retrying.Contains(job.Id)">
                                     @(_retrying.Contains(job.Id) ? "Retrying…" : "Retry")
                                 </button>
-                                <a href="/results/@job.Id" class="btn btn-sm btn-outline-secondary">Details</a>
+                                <a href="/results/@job.Id" class="btn btn-sm btn-outline-secondary me-1">Details</a>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => DeleteAsync(job.Id)"
+                                        disabled="@_deleting.Contains(job.Id)">
+                                    Delete
+                                </button>
                             }
                             else
                             {
@@ -84,6 +99,7 @@
 @code {
     private List<VideoJob>? _jobs;
     private readonly HashSet<Guid> _retrying = [];
+    private readonly HashSet<Guid> _deleting = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -101,14 +117,38 @@
     {
         _retrying.Add(jobId);
         var job = await Db.VideoJobs.FindAsync(jobId);
-        if (job is not null && job.Status == VideoJobStatus.Failed)
+        if (job is not null && (job.Status == VideoJobStatus.Failed || job.Status == VideoJobStatus.ReportComplete))
         {
+            // Clear previous results so they don't accumulate
+            var segments = Db.RallySegments.Where(s => s.VideoJobId == jobId);
+            Db.RallySegments.RemoveRange(segments);
+            var report = await Db.CoachingReports.FirstOrDefaultAsync(r => r.VideoJobId == jobId);
+            if (report is not null) Db.CoachingReports.Remove(report);
+
             job.Status = VideoJobStatus.Queued;
             job.ErrorMessage = null;
+            job.HighlightFilePath = null;
+            job.CompletedAt = null;
             await Db.SaveChangesAsync();
             JobClient.Enqueue<VideoProcessingJob>(j => j.ProcessAsync(jobId));
         }
         _retrying.Remove(jobId);
+        await LoadJobsAsync();
+    }
+
+    private async Task DeleteAsync(Guid jobId)
+    {
+        _deleting.Add(jobId);
+        var job = await Db.VideoJobs.FindAsync(jobId);
+        if (job is not null)
+        {
+            Db.RallySegments.RemoveRange(Db.RallySegments.Where(s => s.VideoJobId == jobId));
+            var report = await Db.CoachingReports.FirstOrDefaultAsync(r => r.VideoJobId == jobId);
+            if (report is not null) Db.CoachingReports.Remove(report);
+            Db.VideoJobs.Remove(job);
+            await Db.SaveChangesAsync();
+        }
+        _deleting.Remove(jobId);
         await LoadJobsAsync();
     }
 
