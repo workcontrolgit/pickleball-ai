@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="PickleIQ.Api/PickleIQ.Api.csproj" />
+  <Project Path="PickleIQ.Core/PickleIQ.Core.csproj" />
+  <Project Path="PickleIQ.Infrastructure/PickleIQ.Infrastructure.csproj" />
+  <Project Path="PickleIQ.Web/PickleIQ.Web.csproj" />
+</Solution>
