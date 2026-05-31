@@ -1,0 +1,164 @@
+@page "/results/{JobId:guid}"
+@using Microsoft.EntityFrameworkCore
+@using PickleIQ.Core.Entities
+@using PickleIQ.Infrastructure.Data
+@inject AppDbContext Db
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Results — PickleIQ</PageTitle>
+
+<div class="container mt-4" style="max-width: 800px;">
+    <h1>Match Results</h1>
+
+    @if (_job is null)
+    {
+        <div class="text-center mt-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">Loading job status...</p>
+        </div>
+    }
+    else if (_job.Status == VideoJobStatus.Failed)
+    {
+        <div class="alert alert-danger">
+            <h5>Processing failed</h5>
+            <p>@(_job.ErrorMessage ?? "An unexpected error occurred.")</p>
+            <small class="text-muted">Job ID: @JobId</small>
+        </div>
+        <a href="/upload" class="btn btn-primary">Try another video</a>
+    }
+    else if (_job.Status != VideoJobStatus.ReportComplete)
+    {
+        <div class="text-center mt-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">@StatusMessage(_job.Status)</p>
+            <div class="progress mt-2" style="height: 8px;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated"
+                     style="width: @ProgressPercent(_job.Status)%"></div>
+            </div>
+            <small class="text-muted mt-2 d-block">Job ID: @JobId</small>
+        </div>
+    }
+    else
+    {
+        <!-- Complete -->
+        <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4>Rally Statistics</h4>
+                @if (!string.IsNullOrEmpty(_job.HighlightFilePath))
+                {
+                    <a href="@DownloadUrl" class="btn btn-success" download>
+                        Download Highlight Reel
+                    </a>
+                }
+            </div>
+            <div class="row mt-2">
+                <div class="col text-center border rounded p-3 me-2">
+                    <div class="fs-2 fw-bold">@_segments.Count</div>
+                    <div class="text-muted small">Rallies Detected</div>
+                </div>
+                <div class="col text-center border rounded p-3 me-2">
+                    <div class="fs-2 fw-bold">@(_segments.Count > 0 ? _segments.Average(s => s.DurationSeconds).ToString("F1") : "—")s</div>
+                    <div class="text-muted small">Avg Rally Length</div>
+                </div>
+                <div class="col text-center border rounded p-3">
+                    <div class="fs-2 fw-bold">@(_segments.Count > 0 ? _segments.Max(s => s.DurationSeconds).ToString("F1") : "—")s</div>
+                    <div class="text-muted small">Longest Rally</div>
+                </div>
+            </div>
+        </div>
+
+        <hr />
+
+        <h4>Coaching Report</h4>
+        @if (_report is not null)
+        {
+            <div>@((MarkupString)_report.HtmlContent)</div>
+        }
+        else
+        {
+            <p class="text-muted">Coaching report not available.</p>
+        }
+
+        <hr />
+        <div class="text-center mt-3">
+            <a href="/upload" class="btn btn-outline-primary">Analyze another video</a>
+            @if (!string.IsNullOrEmpty(_job.HighlightFilePath))
+            {
+                <a href="@DownloadUrl" class="btn btn-success ms-2" download>Download Highlight Reel</a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid JobId { get; set; }
+
+    private VideoJob? _job;
+    private List<RallySegment> _segments = [];
+    private CoachingReport? _report;
+    private System.Threading.Timer? _pollTimer;
+
+    private string DownloadUrl => $"http://localhost:5000/api/download/{JobId}/highlights";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+
+        if (_job?.Status != VideoJobStatus.ReportComplete && _job?.Status != VideoJobStatus.Failed)
+        {
+            _pollTimer = new System.Threading.Timer(async _ =>
+            {
+                await RefreshAsync();
+                await InvokeAsync(StateHasChanged);
+
+                if (_job?.Status == VideoJobStatus.ReportComplete || _job?.Status == VideoJobStatus.Failed)
+                    await _pollTimer!.DisposeAsync();
+            }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        _job = await Db.VideoJobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == JobId);
+
+        if (_job?.Status == VideoJobStatus.ReportComplete)
+        {
+            _segments = await Db.RallySegments.AsNoTracking()
+                .Where(s => s.VideoJobId == JobId)
+                .ToListAsync();
+
+            _report = await Db.CoachingReports.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.VideoJobId == JobId);
+        }
+    }
+
+    private static string StatusMessage(VideoJobStatus status) => status switch
+    {
+        VideoJobStatus.Queued => "Queued — waiting to start...",
+        VideoJobStatus.RallyDetectionInProgress => "Detecting rallies...",
+        VideoJobStatus.RallyDetectionComplete => "Rallies detected — generating highlights...",
+        VideoJobStatus.HighlightInProgress => "Creating highlight reel...",
+        VideoJobStatus.HighlightComplete => "Highlights ready — generating coaching report...",
+        VideoJobStatus.ReportInProgress => "Generating AI coaching report...",
+        _ => "Processing..."
+    };
+
+    private static int ProgressPercent(VideoJobStatus status) => status switch
+    {
+        VideoJobStatus.Queued => 5,
+        VideoJobStatus.RallyDetectionInProgress => 25,
+        VideoJobStatus.RallyDetectionComplete => 50,
+        VideoJobStatus.HighlightInProgress => 65,
+        VideoJobStatus.HighlightComplete => 80,
+        VideoJobStatus.ReportInProgress => 90,
+        _ => 10
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_pollTimer is not null)
+            await _pollTimer.DisposeAsync();
+    }
+}

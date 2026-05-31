@@ -10,6 +10,7 @@ using PickleIQ.Infrastructure.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
+builder.Services.AddControllers();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
 
@@ -39,5 +40,6 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseHangfireDashboard("/hangfire");
+app.MapControllers();
 
 app.Run();
