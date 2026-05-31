@@ -17,7 +17,7 @@
     <PackageReference Include="SkiaSharp" Version="3.119.4" />
     <PackageReference Include="YoloDotNet" Version="4.1.0" />
     <PackageReference Include="YoloDotNet.ExecutionProvider.Cpu" Version="1.1.0" />
-    <PackageReference Include="YoloDotNet.ExecutionProvider.Cuda" Version="1.1.0" />
+    <PackageReference Include="YoloDotNet.ExecutionProvider.DirectML" Version="1.0.0" />
   </ItemGroup>
 
   <PropertyGroup>

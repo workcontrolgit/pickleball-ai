@@ -7,7 +7,7 @@ using SkiaSharp;
 using YoloDotNet;
 using YoloDotNet.Models;
 using YoloDotNet.ExecutionProvider.Cpu;
-using YoloDotNet.ExecutionProvider.Cuda;
+using YoloDotNet.ExecutionProvider.DirectML;
 
 namespace PickleIQ.Infrastructure.Services;
 
@@ -93,13 +93,13 @@ public class RallyDetectionService(
             {
                 yolo = new Yolo(new YoloOptions
                 {
-                    ExecutionProvider = new CudaExecutionProvider(modelPath)
+                    ExecutionProvider = new DirectMLExecutionProvider(modelPath)
                 });
-                logger.LogInformation("YOLO running on GPU (CUDA)");
+                logger.LogInformation("YOLO running on GPU (DirectML)");
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "CUDA execution provider failed — falling back to CPU. Ensure CUDA Toolkit 12.x and cuDNN 9.x are installed.");
+                logger.LogWarning(ex, "DirectML execution provider failed — falling back to CPU");
             }
         }
 
