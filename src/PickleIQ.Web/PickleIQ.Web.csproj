@@ -5,6 +5,13 @@
     <ProjectReference Include="..\PickleIQ.Infrastructure\PickleIQ.Infrastructure.csproj" />
   </ItemGroup>
 
+  <!-- Copy YOLO model to output if present (file is gitignored; download separately) -->
+  <ItemGroup>
+    <None Include="..\PickleIQ.Infrastructure\Models\*.onnx"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="Models\%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Hangfire.AspNetCore" Version="1.8.23" />
     <PackageReference Include="Hangfire.SqlServer" Version="1.8.23" />
