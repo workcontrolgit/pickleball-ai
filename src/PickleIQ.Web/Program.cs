@@ -8,91 +8,127 @@ using PickleIQ.Infrastructure.Data;
 using PickleIQ.Infrastructure.Jobs;
 using PickleIQ.Infrastructure.AI;
 using PickleIQ.Infrastructure.Services;
+using Serilog;
 using PickleIQ.Web.Components;
 
-var builder = WebApplication.CreateBuilder(args);
+// Bootstrap logger so startup errors are captured
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-// Resolve FFmpeg binary folder: config → WinGet auto-detect → PATH
-var ffmpegFolder = builder.Configuration["FFmpeg:BinaryFolder"];
-if (string.IsNullOrEmpty(ffmpegFolder))
+try
 {
-    // Auto-detect WinGet FFmpeg installation (Gyan.FFmpeg package)
-    var wingetBase = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Microsoft", "WinGet", "Packages");
-    if (Directory.Exists(wingetBase))
+    var builder = WebApplication.CreateBuilder(args);
+
+    builder.Host.UseSerilog((ctx, lc) => lc
+        .ReadFrom.Configuration(ctx.Configuration)
+        .Enrich.FromLogContext()
+        .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}")
+        .WriteTo.File("logs/pickleiq-.log",
+            rollingInterval: RollingInterval.Day,
+            outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}] {SourceContext}: {Message:lj}{NewLine}{Exception}"));
+
+    // Resolve FFmpeg: config key → WinGet auto-detect → inject into process PATH
+    var ffmpegFolder = builder.Configuration["FFmpeg:BinaryFolder"];
+    if (string.IsNullOrEmpty(ffmpegFolder))
     {
-        ffmpegFolder = Directory.EnumerateDirectories(wingetBase, "Gyan.FFmpeg*")
-            .SelectMany(d => Directory.EnumerateDirectories(d, "ffmpeg*"))
-            .Select(d => Path.Combine(d, "bin"))
-            .FirstOrDefault(d => File.Exists(Path.Combine(d, "ffmpeg.exe")));
+        var wingetBase = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Microsoft", "WinGet", "Packages");
+        if (Directory.Exists(wingetBase))
+        {
+            ffmpegFolder = Directory.EnumerateDirectories(wingetBase, "Gyan.FFmpeg*")
+                .SelectMany(d => Directory.EnumerateDirectories(d, "ffmpeg*"))
+                .Select(d => Path.Combine(d, "bin"))
+                .FirstOrDefault(d => File.Exists(Path.Combine(d, "ffmpeg.exe")));
+        }
     }
+
+    if (!string.IsNullOrEmpty(ffmpegFolder))
+    {
+        // Set GlobalFFOptions for FFMpegCore and also inject into PATH so child processes find it
+        GlobalFFOptions.Configure(new FFOptions { BinaryFolder = ffmpegFolder });
+        var currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+        if (!currentPath.Contains(ffmpegFolder, StringComparison.OrdinalIgnoreCase))
+            Environment.SetEnvironmentVariable("PATH", ffmpegFolder + Path.PathSeparator + currentPath);
+        Log.Information("FFmpeg resolved at: {Folder}", ffmpegFolder);
+    }
+    else
+    {
+        Log.Warning("FFmpeg not found via config or WinGet — falling back to system PATH");
+    }
+
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
+
+    builder.Services.AddRazorComponents()
+        .AddInteractiveServerComponents();
+
+    builder.Services.AddScoped(sp =>
+        new HttpClient { BaseAddress = new Uri(builder.Configuration["AppBaseUrl"] ?? "https://localhost:5001") });
+
+    builder.Services.AddDbContext<AppDbContext>(options =>
+        options.UseSqlServer(connectionString));
+
+    builder.Services.AddHangfire(config => config
+        .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+        .UseSimpleAssemblyNameTypeSerializer()
+        .UseRecommendedSerializerSettings()
+        .UseSqlServerStorage(connectionString));
+
+    builder.Services.AddHangfireServer();
+
+    builder.Services.AddScoped<IVideoStorageService, VideoStorageService>();
+    builder.Services.AddScoped<IRallyDetectionService, RallyDetectionService>();
+    builder.Services.AddScoped<IHighlightGenerationService, HighlightGenerationService>();
+    builder.Services.AddScoped<ICoachingEngine, OllamaCoachingEngine>();
+    builder.Services.AddScoped<VideoProcessingJob>();
+
+    var app = builder.Build();
+
+    if (!app.Environment.IsDevelopment())
+    {
+        app.UseExceptionHandler("/Error", createScopeForErrors: true);
+        app.UseHsts();
+    }
+
+    app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+    app.UseHttpsRedirection();
+    app.UseAntiforgery();
+
+    app.MapStaticAssets();
+    app.MapRazorComponents<App>()
+        .AddInteractiveServerRenderMode();
+
+    app.MapGet("/download/{jobId:guid}/highlights", async (Guid jobId, AppDbContext db) =>
+    {
+        var job = await db.VideoJobs.FirstOrDefaultAsync(j => j.Id == jobId);
+        if (job is null || string.IsNullOrEmpty(job.HighlightFilePath) || !File.Exists(job.HighlightFilePath))
+            return Results.NotFound("Highlight file not available.");
+        var stream = File.OpenRead(job.HighlightFilePath);
+        return Results.File(stream, "video/mp4", $"highlights-{jobId}.mp4");
+    });
+
+    app.MapPost("/jobs/{jobId:guid}/retry", async (Guid jobId, AppDbContext db, IBackgroundJobClient jobClient) =>
+    {
+        var job = await db.VideoJobs.FirstOrDefaultAsync(j => j.Id == jobId);
+        if (job is null) return Results.NotFound();
+        if (job.Status != VideoJobStatus.Failed) return Results.BadRequest("Job is not in a failed state.");
+
+        job.Status = VideoJobStatus.Queued;
+        job.ErrorMessage = null;
+        await db.SaveChangesAsync();
+
+        jobClient.Enqueue<VideoProcessingJob>(j => j.ProcessAsync(jobId));
+        return Results.Ok();
+    });
+
+    app.Run();
 }
-if (!string.IsNullOrEmpty(ffmpegFolder))
-    GlobalFFOptions.Configure(new FFMpegCore.FFOptions { BinaryFolder = ffmpegFolder });
-
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
-
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
-
-builder.Services.AddScoped(sp =>
-    new HttpClient { BaseAddress = new Uri(builder.Configuration["AppBaseUrl"] ?? "https://localhost:5001") });
-
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString));
-
-builder.Services.AddHangfire(config => config
-    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
-    .UseSimpleAssemblyNameTypeSerializer()
-    .UseRecommendedSerializerSettings()
-    .UseSqlServerStorage(connectionString));
-
-builder.Services.AddHangfireServer();
-
-builder.Services.AddScoped<IVideoStorageService, VideoStorageService>();
-builder.Services.AddScoped<IRallyDetectionService, RallyDetectionService>();
-builder.Services.AddScoped<IHighlightGenerationService, HighlightGenerationService>();
-builder.Services.AddScoped<ICoachingEngine, OllamaCoachingEngine>();
-builder.Services.AddScoped<VideoProcessingJob>();
-
-var app = builder.Build();
-
-if (!app.Environment.IsDevelopment())
+catch (Exception ex)
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    app.UseHsts();
+    Log.Fatal(ex, "Application startup failed");
 }
-
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
-app.UseAntiforgery();
-
-app.MapStaticAssets();
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
-
-app.MapGet("/download/{jobId:guid}/highlights", async (Guid jobId, AppDbContext db) =>
+finally
 {
-    var job = await db.VideoJobs.FirstOrDefaultAsync(j => j.Id == jobId);
-    if (job is null || string.IsNullOrEmpty(job.HighlightFilePath) || !File.Exists(job.HighlightFilePath))
-        return Results.NotFound("Highlight file not available.");
-    var stream = File.OpenRead(job.HighlightFilePath);
-    return Results.File(stream, "video/mp4", $"highlights-{jobId}.mp4");
-});
-
-app.MapPost("/jobs/{jobId:guid}/retry", async (Guid jobId, AppDbContext db, IBackgroundJobClient jobClient) =>
-{
-    var job = await db.VideoJobs.FirstOrDefaultAsync(j => j.Id == jobId);
-    if (job is null) return Results.NotFound();
-    if (job.Status != VideoJobStatus.Failed) return Results.BadRequest("Job is not in a failed state.");
-
-    job.Status = VideoJobStatus.Queued;
-    job.ErrorMessage = null;
-    await db.SaveChangesAsync();
-
-    jobClient.Enqueue<VideoProcessingJob>(j => j.ProcessAsync(jobId));
-    return Results.Ok();
-});
-
-app.Run();
+    Log.CloseAndFlush();
+}
