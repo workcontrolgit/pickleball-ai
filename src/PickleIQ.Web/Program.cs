@@ -1,3 +1,4 @@
+using FFMpegCore;
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,12 @@ using PickleIQ.Infrastructure.Services;
 using PickleIQ.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Allow overriding the FFmpeg binary folder via config (e.g. appsettings.Development.json).
+// If not set, FFMpegCore looks for ffmpeg on the system PATH.
+var ffmpegFolder = builder.Configuration["FFmpeg:BinaryFolder"];
+if (!string.IsNullOrEmpty(ffmpegFolder))
+    GlobalFFOptions.Configure(opts => opts.BinaryFolder = ffmpegFolder);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
 

@@ -24,7 +24,7 @@ AI-powered pickleball video analysis. Upload a match video and get back a highli
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - [SQL Server Express LocalDB](https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/sql-server-express-localdb) (installed with Visual Studio or standalone)
-- [FFmpeg](https://ffmpeg.org/download.html) — must be on `PATH`
+- [FFmpeg](https://ffmpeg.org/download.html) — must be on `PATH` or configured via `FFmpeg:BinaryFolder` (see below)
 - [Ollama](https://ollama.com) with `nemotron-mini` pulled (optional — falls back to statistical summary if unavailable)
 
 ```bash
@@ -69,18 +69,23 @@ dotnet ef database update --project src/PickleIQ.Infrastructure --startup-projec
 
 This creates the `PickleIQ` database in LocalDB with the required tables.
 
-### 3. Configure storage paths (optional)
+### 3. Configure paths (optional)
 
-The defaults write videos and highlights to `C:/temp/pickleiq/`. Override in `appsettings.Development.json`:
+The defaults write videos and highlights to `C:/temp/pickleiq/` and expect FFmpeg on the system `PATH`. Override in `appsettings.Development.json`:
 
 ```json
 {
   "VideoStorage": {
     "BasePath": "C:/your/path/videos",
     "HighlightsPath": "C:/your/path/highlights"
+  },
+  "FFmpeg": {
+    "BinaryFolder": "C:/path/to/ffmpeg/bin"
   }
 }
 ```
+
+> **Installing FFmpeg on Windows:** Run `winget install Gyan.FFmpeg` in a terminal, then restart VS Code so the updated `PATH` takes effect. Alternatively set `FFmpeg:BinaryFolder` to the `bin` folder of a manual FFmpeg download.
 
 ### 4. Run
 
@@ -127,6 +132,7 @@ docs/
 | `Ollama:Endpoint` | `http://localhost:11434` | Ollama server URL |
 | `Ollama:Model` | `nemotron-mini` | Model to use for coaching reports |
 | `YoloModel:Path` | `Models/yolo11n.onnx` | Path to ONNX model file (relative to app base) |
+| `FFmpeg:BinaryFolder` | _(system PATH)_ | Explicit path to FFmpeg `bin` folder — set if `ffmpeg` is not on PATH |
 
 ## Hangfire Dashboard
 
