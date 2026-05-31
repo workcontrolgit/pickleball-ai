@@ -23,7 +23,7 @@ public class RallyDetectionService(
     public async Task<IList<(double StartSeconds, double EndSeconds)>> DetectRalliesAsync(
         string videoPath, CancellationToken cancellationToken = default)
     {
-        FFmpegLocator.EnsureConfigured(configuration);
+        var ffOptions = FFmpegLocator.GetOptions(configuration);
         logger.LogInformation("Starting rally detection for {VideoPath}", videoPath);
 
         var framesDir = Path.Combine(Path.GetTempPath(), $"pickleiq-frames-{Guid.NewGuid()}");
@@ -32,7 +32,7 @@ public class RallyDetectionService(
         try
         {
             // Extract frames at 2fps
-            await ExtractFramesAsync(videoPath, framesDir, cancellationToken);
+            await ExtractFramesAsync(videoPath, framesDir, ffOptions, cancellationToken);
 
             var frameFiles = Directory.GetFiles(framesDir, "*.jpg")
                 .OrderBy(f => f)
@@ -58,7 +58,7 @@ public class RallyDetectionService(
         }
     }
 
-    private static async Task ExtractFramesAsync(string videoPath, string outputDir, CancellationToken cancellationToken)
+    private static async Task ExtractFramesAsync(string videoPath, string outputDir, FFOptions ffOptions, CancellationToken cancellationToken)
     {
         await FFMpegArguments
             .FromFileInput(videoPath)
@@ -69,7 +69,7 @@ public class RallyDetectionService(
                     .WithVideoFilters(f => f.Scale(640, -1))
                     .WithFramerate(FrameRateFps)
                     .ForceFormat("image2"))
-            .ProcessAsynchronously();
+            .ProcessAsynchronously(true, ffOptions);
     }
 
     private List<double> DetectActiveFrames(List<string> frameFiles, string modelPath)

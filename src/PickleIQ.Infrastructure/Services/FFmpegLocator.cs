@@ -4,27 +4,32 @@ using Microsoft.Extensions.Configuration;
 namespace PickleIQ.Infrastructure.Services;
 
 /// <summary>
-/// Ensures FFMpegCore knows where to find ffmpeg.exe, resolving in this order:
-///   1. FFmpeg:BinaryFolder config key
-///   2. WinGet Gyan.FFmpeg package (auto-detected)
-///   3. System PATH (FFMpegCore default — no action needed)
+/// Resolves the FFmpeg binary folder and returns FFOptions for per-call use.
+/// Resolution order: FFmpeg:BinaryFolder config → WinGet auto-detect → null (PATH).
 /// </summary>
 internal static class FFmpegLocator
 {
-    private static bool _configured;
+    private static string? _resolvedFolder;
+    private static bool _resolved;
     private static readonly Lock _lock = new();
 
-    public static void EnsureConfigured(IConfiguration configuration)
+    public static FFOptions GetOptions(IConfiguration configuration)
     {
-        if (_configured) return;
-        lock (_lock)
+        if (!_resolved)
         {
-            if (_configured) return;
-            var folder = configuration["FFmpeg:BinaryFolder"] ?? DetectWinGet();
-            if (!string.IsNullOrEmpty(folder))
-                GlobalFFOptions.Configure(new FFOptions { BinaryFolder = folder });
-            _configured = true;
+            lock (_lock)
+            {
+                if (!_resolved)
+                {
+                    _resolvedFolder = configuration["FFmpeg:BinaryFolder"] ?? DetectWinGet();
+                    _resolved = true;
+                }
+            }
         }
+
+        return _resolvedFolder is not null
+            ? new FFOptions { BinaryFolder = _resolvedFolder }
+            : new FFOptions();
     }
 
     private static string? DetectWinGet()

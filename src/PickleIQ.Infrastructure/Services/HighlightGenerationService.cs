@@ -17,7 +17,7 @@ public class HighlightGenerationService(
 
     public async Task<string> GenerateAsync(Guid jobId, string videoPath, CancellationToken cancellationToken = default)
     {
-        FFmpegLocator.EnsureConfigured(configuration);
+        var ffOptions = FFmpegLocator.GetOptions(configuration);
         logger.LogInformation("Generating highlights for job {JobId}", jobId);
 
         var segments = await db.RallySegments
@@ -67,7 +67,7 @@ public class HighlightGenerationService(
                         .WithDuration(TimeSpan.FromSeconds(paddedEnd - paddedStart))
                         .CopyChannel()
                         .ForceFormat("mp4"))
-                    .ProcessAsynchronously();
+                    .ProcessAsynchronously(true, ffOptions);
 
                 clipPaths.Add(clipPath);
             }
@@ -83,7 +83,7 @@ public class HighlightGenerationService(
                 .OutputToFile(outputPath, overwrite: true, options => options
                     .CopyChannel()
                     .ForceFormat("mp4"))
-                .ProcessAsynchronously();
+                .ProcessAsynchronously(true, ffOptions);
 
             logger.LogInformation("Highlight reel created at {OutputPath}", outputPath);
             return outputPath;
