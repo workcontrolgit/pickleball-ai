@@ -5,7 +5,10 @@ using PickleIQ.Infrastructure.Data;
 
 namespace PickleIQ.Infrastructure.Jobs;
 
-public class VideoProcessingJob(AppDbContext db, ILogger<VideoProcessingJob> logger) : IVideoProcessingJob
+public class VideoProcessingJob(
+    AppDbContext db,
+    IRallyDetectionService rallyDetectionService,
+    ILogger<VideoProcessingJob> logger) : IVideoProcessingJob
 {
     public async Task ProcessAsync(Guid jobId)
     {
@@ -20,21 +23,36 @@ public class VideoProcessingJob(AppDbContext db, ILogger<VideoProcessingJob> log
 
         try
         {
-            // Step 1: Rally Detection (stub — to be implemented in Task 11)
+            // Step 1: Rally Detection
             job.Status = VideoJobStatus.RallyDetectionInProgress;
             await db.SaveChangesAsync();
-            logger.LogInformation("Job {JobId}: rally detection placeholder", jobId);
+
+            var segments = await rallyDetectionService.DetectRalliesAsync(job.FilePath);
+
+            foreach (var (start, end) in segments)
+            {
+                db.RallySegments.Add(new RallySegment
+                {
+                    Id = Guid.NewGuid(),
+                    VideoJobId = jobId,
+                    StartSeconds = start,
+                    EndSeconds = end
+                });
+            }
+
             job.Status = VideoJobStatus.RallyDetectionComplete;
             await db.SaveChangesAsync();
 
-            // Step 2: Highlight Generation (stub — to be implemented in Task 12)
+            logger.LogInformation("Job {JobId}: {Count} rally segments detected", jobId, segments.Count);
+
+            // Step 2: Highlight Generation (stub — implemented in Task 12)
             job.Status = VideoJobStatus.HighlightInProgress;
             await db.SaveChangesAsync();
             logger.LogInformation("Job {JobId}: highlight generation placeholder", jobId);
             job.Status = VideoJobStatus.HighlightComplete;
             await db.SaveChangesAsync();
 
-            // Step 3: Coaching Report (stub — to be implemented in Task 13)
+            // Step 3: Coaching Report (stub — implemented in Task 13)
             job.Status = VideoJobStatus.ReportInProgress;
             await db.SaveChangesAsync();
             logger.LogInformation("Job {JobId}: coaching report placeholder", jobId);

@@ -1,8 +1,10 @@
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.EntityFrameworkCore;
+using PickleIQ.Core.Interfaces;
 using PickleIQ.Infrastructure.Data;
 using PickleIQ.Infrastructure.Jobs;
+using PickleIQ.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +23,7 @@ builder.Services.AddHangfire(config => config
 
 builder.Services.AddHangfireServer();
 
+builder.Services.AddScoped<IRallyDetectionService, RallyDetectionService>();
 builder.Services.AddScoped<VideoProcessingJob>();
 
 var app = builder.Build();

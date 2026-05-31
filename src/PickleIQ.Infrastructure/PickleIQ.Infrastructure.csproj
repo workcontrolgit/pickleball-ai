@@ -5,6 +5,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FFMpegCore" Version="5.4.0" />
     <PackageReference Include="Hangfire.Core" Version="1.8.23" />
     <PackageReference Include="Hangfire.SqlServer" Version="1.8.23" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8">
@@ -12,6 +13,9 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.8" />
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+    <PackageReference Include="YoloDotNet" Version="4.2.0" />
+    <PackageReference Include="YoloDotNet.ExecutionProvider.Cpu" Version="1.1.0" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -1,0 +1,140 @@
+using FFMpegCore;
+using FFMpegCore.Enums;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using PickleIQ.Core.Interfaces;
+using SkiaSharp;
+using YoloDotNet;
+using YoloDotNet.Models;
+using YoloDotNet.ExecutionProvider.Cpu;
+
+namespace PickleIQ.Infrastructure.Services;
+
+public class RallyDetectionService(
+    IConfiguration configuration,
+    ILogger<RallyDetectionService> logger) : IRallyDetectionService
+{
+    private const double FrameRateFps = 2.0;
+    private const double MinRallySeconds = 3.0;
+    private const double GapToleranceSeconds = 1.0;
+    private const float PersonConfidenceThreshold = 0.4f;
+    private const int MinPlayersForActiveFrame = 2;
+
+    public async Task<IList<(double StartSeconds, double EndSeconds)>> DetectRalliesAsync(
+        string videoPath, CancellationToken cancellationToken = default)
+    {
+        logger.LogInformation("Starting rally detection for {VideoPath}", videoPath);
+
+        var framesDir = Path.Combine(Path.GetTempPath(), $"pickleiq-frames-{Guid.NewGuid()}");
+        Directory.CreateDirectory(framesDir);
+
+        try
+        {
+            // Extract frames at 2fps
+            await ExtractFramesAsync(videoPath, framesDir, cancellationToken);
+
+            var frameFiles = Directory.GetFiles(framesDir, "*.jpg")
+                .OrderBy(f => f)
+                .ToList();
+
+            logger.LogInformation("Extracted {Count} frames", frameFiles.Count);
+
+            // Detect players in each frame
+            var modelPath = configuration["YoloModel:Path"]
+                ?? Path.Combine(AppContext.BaseDirectory, "Models", "yolo11n.onnx");
+
+            var activeFrames = DetectActiveFrames(frameFiles, modelPath);
+
+            // Group active frames into rally segments
+            var segments = GroupIntoSegments(activeFrames);
+
+            logger.LogInformation("Detected {Count} rally segments", segments.Count);
+            return segments;
+        }
+        finally
+        {
+            Directory.Delete(framesDir, recursive: true);
+        }
+    }
+
+    private static async Task ExtractFramesAsync(string videoPath, string outputDir, CancellationToken cancellationToken)
+    {
+        await FFMpegArguments
+            .FromFileInput(videoPath)
+            .OutputToFile(
+                Path.Combine(outputDir, "frame-%05d.jpg"),
+                overwrite: true,
+                options => options
+                    .WithVideoFilters(f => f.Scale(640, -1))
+                    .WithFramerate(FrameRateFps)
+                    .ForceFormat("image2"))
+            .ProcessAsynchronously();
+    }
+
+    private List<double> DetectActiveFrames(List<string> frameFiles, string modelPath)
+    {
+        if (!File.Exists(modelPath))
+        {
+            logger.LogWarning("YOLO model not found at {ModelPath}. Rally detection will return empty results.", modelPath);
+            return [];
+        }
+
+        var activeTimestamps = new List<double>();
+        var secondsPerFrame = 1.0 / FrameRateFps;
+
+        using var yolo = new Yolo(new YoloOptions
+        {
+            ExecutionProvider = new CpuExecutionProvider(modelPath)
+        });
+
+        for (int i = 0; i < frameFiles.Count; i++)
+        {
+            var frameTimestamp = i * secondsPerFrame;
+            try
+            {
+                using var bitmap = SKBitmap.Decode(frameFiles[i]);
+                var detections = yolo.RunObjectDetection(bitmap, confidence: PersonConfidenceThreshold);
+                var personCount = detections.Count(d => d.Label.Name == "person");
+
+                if (personCount >= MinPlayersForActiveFrame)
+                    activeTimestamps.Add(frameTimestamp);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Frame {FrameIndex} detection failed, skipping", i);
+            }
+        }
+
+        return activeTimestamps;
+    }
+
+    private static List<(double StartSeconds, double EndSeconds)> GroupIntoSegments(List<double> activeTimestamps)
+    {
+        if (activeTimestamps.Count == 0) return [];
+
+        var segments = new List<(double Start, double End)>();
+        var segStart = activeTimestamps[0];
+        var segEnd = activeTimestamps[0];
+
+        for (int i = 1; i < activeTimestamps.Count; i++)
+        {
+            var gap = activeTimestamps[i] - segEnd;
+            if (gap <= GapToleranceSeconds)
+            {
+                segEnd = activeTimestamps[i];
+            }
+            else
+            {
+                if (segEnd - segStart >= MinRallySeconds)
+                    segments.Add((segStart, segEnd));
+                segStart = activeTimestamps[i];
+                segEnd = activeTimestamps[i];
+            }
+        }
+
+        if (segEnd - segStart >= MinRallySeconds)
+            segments.Add((segStart, segEnd));
+
+        return segments;
+    }
+}
