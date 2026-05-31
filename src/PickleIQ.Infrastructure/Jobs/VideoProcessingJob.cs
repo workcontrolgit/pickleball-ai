@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PickleIQ.Core.Entities;
 using PickleIQ.Core.Interfaces;
@@ -9,6 +10,7 @@ public class VideoProcessingJob(
     AppDbContext db,
     IRallyDetectionService rallyDetectionService,
     IHighlightGenerationService highlightGenerationService,
+    ICoachingEngine coachingEngine,
     ILogger<VideoProcessingJob> logger) : IVideoProcessingJob
 {
     public async Task ProcessAsync(Guid jobId)
@@ -57,10 +59,29 @@ public class VideoProcessingJob(
 
             logger.LogInformation("Job {JobId}: highlight reel at {Path}", jobId, highlightPath);
 
-            // Step 3: Coaching Report (stub — implemented in Task 13)
+            // Step 3: Coaching Report
             job.Status = VideoJobStatus.ReportInProgress;
             await db.SaveChangesAsync();
-            logger.LogInformation("Job {JobId}: coaching report placeholder", jobId);
+
+            var savedSegments = await db.RallySegments.Where(r => r.VideoJobId == jobId).ToListAsync();
+            var durations = savedSegments.Select(s => s.EndSeconds - s.StartSeconds).ToList();
+
+            var summary = new MatchSummary(
+                RallyCount: savedSegments.Count,
+                AverageRallySeconds: durations.Count > 0 ? durations.Average() : 0,
+                LongestRallySeconds: durations.Count > 0 ? durations.Max() : 0,
+                TotalMatchSeconds: 0 // duration from video metadata — set to 0 for MVP
+            );
+
+            var htmlReport = await coachingEngine.GenerateReportHtmlAsync(summary);
+
+            db.CoachingReports.Add(new CoachingReport
+            {
+                Id = Guid.NewGuid(),
+                VideoJobId = jobId,
+                HtmlContent = htmlReport
+            });
+
             job.Status = VideoJobStatus.ReportComplete;
             job.CompletedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
