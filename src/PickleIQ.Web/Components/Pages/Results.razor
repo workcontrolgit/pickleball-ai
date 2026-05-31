@@ -2,9 +2,11 @@
 @using Microsoft.EntityFrameworkCore
 @using PickleIQ.Core.Entities
 @using PickleIQ.Infrastructure.Data
+@using Hangfire
+@using PickleIQ.Infrastructure.Jobs
 @inject AppDbContext Db
 @inject NavigationManager Navigation
-@inject HttpClient Http
+@inject IBackgroundJobClient JobClient
 @implements IAsyncDisposable
 @rendermode InteractiveServer
 
@@ -164,7 +166,14 @@
     private async Task RetryAsync()
     {
         _retrying = true;
-        await Http.PostAsync($"/jobs/{JobId}/retry", null);
+        var job = await Db.VideoJobs.FindAsync(JobId);
+        if (job is not null && job.Status == VideoJobStatus.Failed)
+        {
+            job.Status = VideoJobStatus.Queued;
+            job.ErrorMessage = null;
+            await Db.SaveChangesAsync();
+            JobClient.Enqueue<VideoProcessingJob>(j => j.ProcessAsync(JobId));
+        }
         _retrying = false;
 
         // Resume polling

@@ -63,9 +63,6 @@ try
     builder.Services.AddRazorComponents()
         .AddInteractiveServerComponents();
 
-    builder.Services.AddScoped(sp =>
-        new HttpClient { BaseAddress = new Uri(builder.Configuration["AppBaseUrl"] ?? "https://localhost:5001") });
-
     builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseSqlServer(connectionString));
 
@@ -106,20 +103,6 @@ try
             return Results.NotFound("Highlight file not available.");
         var stream = File.OpenRead(job.HighlightFilePath);
         return Results.File(stream, "video/mp4", $"highlights-{jobId}.mp4");
-    });
-
-    app.MapPost("/jobs/{jobId:guid}/retry", async (Guid jobId, AppDbContext db, IBackgroundJobClient jobClient) =>
-    {
-        var job = await db.VideoJobs.FirstOrDefaultAsync(j => j.Id == jobId);
-        if (job is null) return Results.NotFound();
-        if (job.Status != VideoJobStatus.Failed) return Results.BadRequest("Job is not in a failed state.");
-
-        job.Status = VideoJobStatus.Queued;
-        job.ErrorMessage = null;
-        await db.SaveChangesAsync();
-
-        jobClient.Enqueue<VideoProcessingJob>(j => j.ProcessAsync(jobId));
-        return Results.Ok();
     });
 
     app.Run();
