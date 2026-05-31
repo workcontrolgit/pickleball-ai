@@ -66,7 +66,7 @@ public class RallyDetectionService(
                 Path.Combine(outputDir, "frame-%05d.jpg"),
                 overwrite: true,
                 options => options
-                    .WithVideoFilters(f => f.Scale(640, -1))
+                    .WithVideoFilters(f => f.Scale(640, -2))   // -2 = nearest even number (YOLO requires even dims)
                     .WithFramerate(FrameRateFps)
                     .ForceFormat("image2"))
             .ProcessAsynchronously(true, ffOptions);
@@ -83,26 +83,40 @@ public class RallyDetectionService(
         var activeTimestamps = new List<double>();
         var secondsPerFrame = 1.0 / FrameRateFps;
 
-        using var yolo = new Yolo(new YoloOptions
+        Yolo? yolo = null;
+        try
         {
-            ExecutionProvider = new CpuExecutionProvider(modelPath)
-        });
-
-        for (int i = 0; i < frameFiles.Count; i++)
+            yolo = new Yolo(new YoloOptions
+            {
+                ExecutionProvider = new CpuExecutionProvider(modelPath)
+            });
+        }
+        catch (Exception ex)
         {
-            var frameTimestamp = i * secondsPerFrame;
-            try
-            {
-                using var bitmap = SKBitmap.Decode(frameFiles[i]);
-                var detections = yolo.RunObjectDetection(bitmap, confidence: PersonConfidenceThreshold);
-                var personCount = detections.Count(d => d.Label.Name == "person");
+            logger.LogError(ex, "Failed to initialize YOLO model from {ModelPath}", modelPath);
+            return [];
+        }
 
-                if (personCount >= MinPlayersForActiveFrame)
-                    activeTimestamps.Add(frameTimestamp);
-            }
-            catch (Exception ex)
+        using (yolo)
+        {
+            for (int i = 0; i < frameFiles.Count; i++)
             {
-                logger.LogWarning(ex, "Frame {FrameIndex} detection failed, skipping", i);
+                var frameTimestamp = i * secondsPerFrame;
+                try
+                {
+                    using var bitmap = SKBitmap.Decode(frameFiles[i]);
+                    if (bitmap is null) continue;
+
+                    var detections = yolo.RunObjectDetection(bitmap, confidence: PersonConfidenceThreshold, iou: 0.5f);
+                    var personCount = detections.Count(d => d.Label.Name == "person");
+
+                    if (personCount >= MinPlayersForActiveFrame)
+                        activeTimestamps.Add(frameTimestamp);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Frame {FrameIndex} detection failed, skipping", i);
+                }
             }
         }
 
