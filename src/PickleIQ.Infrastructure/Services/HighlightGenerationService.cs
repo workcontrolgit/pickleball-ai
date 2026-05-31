@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using FFMpegCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -76,14 +77,23 @@ public class HighlightGenerationService(
             var lines = clipPaths.Select(p => $"file '{p.Replace("\\", "/")}'");
             await File.WriteAllLinesAsync(concatListPath, lines, cancellationToken);
 
-            // Concatenate clips
-            await FFMpegArguments
-                .FromFileInput(concatListPath, verifyExists: true, options => options
-                    .WithCustomArgument("-f concat -safe 0"))
-                .OutputToFile(outputPath, overwrite: true, options => options
-                    .CopyChannel()
-                    .ForceFormat("mp4"))
-                .ProcessAsynchronously(true, ffOptions);
+            // Concatenate clips — -f concat -safe 0 must appear before -i
+            // FFMpegCore places input options after -i, so we invoke ffmpeg directly here
+            var ffmpegExe = Path.Combine(ffOptions.BinaryFolder ?? "", "ffmpeg.exe");
+            if (!File.Exists(ffmpegExe)) ffmpegExe = "ffmpeg"; // fall back to PATH
+
+            var concatArgs = $"-y -f concat -safe 0 -i \"{concatListPath.Replace("\\", "/")}\" -c:v libx264 -crf 23 -preset fast -c:a aac \"{outputPath.Replace("\\", "/")}\"";
+            var psi = new ProcessStartInfo(ffmpegExe, concatArgs)
+            {
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var proc = Process.Start(psi)!;
+            var stderr = await proc.StandardError.ReadToEndAsync(cancellationToken);
+            await proc.WaitForExitAsync(cancellationToken);
+            if (proc.ExitCode != 0)
+                throw new InvalidOperationException($"FFmpeg concat failed: {stderr}");
 
             logger.LogInformation("Highlight reel created at {OutputPath}", outputPath);
             return outputPath;
