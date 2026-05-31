@@ -66,7 +66,9 @@ public class HighlightGenerationService(
                         .Seek(TimeSpan.FromSeconds(paddedStart)))
                     .OutputToFile(clipPath, overwrite: true, options => options
                         .WithDuration(TimeSpan.FromSeconds(paddedEnd - paddedStart))
-                        .CopyChannel()
+                        .WithVideoCodec("libx264")
+                        .WithConstantRateFactor(23)
+                        .WithAudioCodec("aac")
                         .ForceFormat("mp4"))
                     .ProcessAsynchronously(true, ffOptions);
 
