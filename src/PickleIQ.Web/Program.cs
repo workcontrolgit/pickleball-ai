@@ -12,11 +12,24 @@ using PickleIQ.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Allow overriding the FFmpeg binary folder via config (e.g. appsettings.Development.json).
-// If not set, FFMpegCore looks for ffmpeg on the system PATH.
+// Resolve FFmpeg binary folder: config → WinGet auto-detect → PATH
 var ffmpegFolder = builder.Configuration["FFmpeg:BinaryFolder"];
+if (string.IsNullOrEmpty(ffmpegFolder))
+{
+    // Auto-detect WinGet FFmpeg installation (Gyan.FFmpeg package)
+    var wingetBase = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Microsoft", "WinGet", "Packages");
+    if (Directory.Exists(wingetBase))
+    {
+        ffmpegFolder = Directory.EnumerateDirectories(wingetBase, "Gyan.FFmpeg*")
+            .SelectMany(d => Directory.EnumerateDirectories(d, "ffmpeg*"))
+            .Select(d => Path.Combine(d, "bin"))
+            .FirstOrDefault(d => File.Exists(Path.Combine(d, "ffmpeg.exe")));
+    }
+}
 if (!string.IsNullOrEmpty(ffmpegFolder))
-    GlobalFFOptions.Configure(opts => opts.BinaryFolder = ffmpegFolder);
+    GlobalFFOptions.Configure(new FFMpegCore.FFOptions { BinaryFolder = ffmpegFolder });
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
 
