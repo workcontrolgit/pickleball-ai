@@ -68,6 +68,7 @@ public class HighlightGenerationService(
                         .WithDuration(TimeSpan.FromSeconds(paddedEnd - paddedStart))
                         .WithVideoCodec("libx264")
                         .WithConstantRateFactor(23)
+                        .WithCustomArgument("-pix_fmt yuv420p")
                         .WithAudioCodec("aac")
                         .ForceFormat("mp4"))
                     .ProcessAsynchronously(true, ffOptions);
@@ -84,7 +85,7 @@ public class HighlightGenerationService(
             var ffmpegExe = Path.Combine(ffOptions.BinaryFolder ?? "", "ffmpeg.exe");
             if (!File.Exists(ffmpegExe)) ffmpegExe = "ffmpeg"; // fall back to PATH
 
-            var concatArgs = $"-y -f concat -safe 0 -i \"{concatListPath.Replace("\\", "/")}\" -c:v libx264 -crf 23 -preset fast -c:a aac \"{outputPath.Replace("\\", "/")}\"";
+            var concatArgs = $"-y -f concat -safe 0 -i \"{concatListPath.Replace("\\", "/")}\" -c:v libx264 -crf 23 -preset fast -pix_fmt yuv420p -c:a aac \"{outputPath.Replace("\\", "/")}\"";
             var psi = new ProcessStartInfo(ffmpegExe, concatArgs)
             {
                 RedirectStandardError = true,
