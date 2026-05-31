@@ -84,17 +84,27 @@ The defaults write videos and highlights to `C:/temp/pickleiq/`. Override in `ap
 
 ### 4. Run
 
-Start both projects. The Web project hosts the UI and the Hangfire background worker:
+Open the project folder in VS Code (`File → Open Folder → pickleball-ai`), then open two integrated terminals (`Ctrl+`` → Split Terminal`) and run each project in its own pane:
 
+**Terminal 1 — Blazor Web (UI + background worker)**
 ```bash
-# Terminal 1 — Blazor Web (port 5001)
 dotnet run --project src/PickleIQ.Web
+```
 
-# Terminal 2 — API (port 5000) — only needed for the Hangfire dashboard
+**Terminal 2 — API (Hangfire dashboard)**
+```bash
 dotnet run --project src/PickleIQ.Api
 ```
 
-Open `https://localhost:5001/upload` and upload a match video.
+Once both are running, open your browser:
+
+| URL | What it is |
+|-----|-----------|
+| `https://localhost:5001/upload` | Upload a match video |
+| `https://localhost:5001/results/{jobId}` | Live processing progress and results |
+| `http://localhost:5000/hangfire` | Hangfire job queue dashboard |
+
+> **Tip:** Watch the Web terminal for log output — it shows each pipeline stage (rally detection → highlight generation → coaching report) in real time.
 
 ## Project Structure
 
