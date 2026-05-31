@@ -8,6 +8,7 @@ namespace PickleIQ.Infrastructure.Jobs;
 public class VideoProcessingJob(
     AppDbContext db,
     IRallyDetectionService rallyDetectionService,
+    IHighlightGenerationService highlightGenerationService,
     ILogger<VideoProcessingJob> logger) : IVideoProcessingJob
 {
     public async Task ProcessAsync(Guid jobId)
@@ -45,12 +46,16 @@ public class VideoProcessingJob(
 
             logger.LogInformation("Job {JobId}: {Count} rally segments detected", jobId, segments.Count);
 
-            // Step 2: Highlight Generation (stub — implemented in Task 12)
+            // Step 2: Highlight Generation
             job.Status = VideoJobStatus.HighlightInProgress;
             await db.SaveChangesAsync();
-            logger.LogInformation("Job {JobId}: highlight generation placeholder", jobId);
+
+            var highlightPath = await highlightGenerationService.GenerateAsync(jobId, job.FilePath);
+            job.HighlightFilePath = highlightPath;
             job.Status = VideoJobStatus.HighlightComplete;
             await db.SaveChangesAsync();
+
+            logger.LogInformation("Job {JobId}: highlight reel at {Path}", jobId, highlightPath);
 
             // Step 3: Coaching Report (stub — implemented in Task 13)
             job.Status = VideoJobStatus.ReportInProgress;
