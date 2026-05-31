@@ -7,6 +7,7 @@ using SkiaSharp;
 using YoloDotNet;
 using YoloDotNet.Models;
 using YoloDotNet.ExecutionProvider.Cpu;
+using YoloDotNet.ExecutionProvider.Cuda;
 
 namespace PickleIQ.Infrastructure.Services;
 
@@ -83,18 +84,40 @@ public class RallyDetectionService(
         var activeTimestamps = new List<double>();
         var secondsPerFrame = 1.0 / FrameRateFps;
 
+        var useGpuYolo = bool.TryParse(configuration["Processing:UseGpuYolo"], out var gy) && gy;
         Yolo? yolo = null;
-        try
+
+        if (useGpuYolo)
         {
-            yolo = new Yolo(new YoloOptions
+            try
             {
-                ExecutionProvider = new CpuExecutionProvider(modelPath)
-            });
+                yolo = new Yolo(new YoloOptions
+                {
+                    ExecutionProvider = new CudaExecutionProvider(modelPath)
+                });
+                logger.LogInformation("YOLO running on GPU (CUDA)");
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "CUDA execution provider failed — falling back to CPU. Ensure CUDA Toolkit 12.x and cuDNN 9.x are installed.");
+            }
         }
-        catch (Exception ex)
+
+        if (yolo is null)
         {
-            logger.LogError(ex, "Failed to initialize YOLO model from {ModelPath}", modelPath);
-            return [];
+            try
+            {
+                yolo = new Yolo(new YoloOptions
+                {
+                    ExecutionProvider = new CpuExecutionProvider(modelPath)
+                });
+                logger.LogInformation("YOLO running on CPU");
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to initialize YOLO model from {ModelPath}", modelPath);
+                return [];
+            }
         }
 
         using (yolo)
