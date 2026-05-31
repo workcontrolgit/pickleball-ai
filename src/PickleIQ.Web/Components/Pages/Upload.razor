@@ -1,0 +1,89 @@
+@page "/upload"
+@using PickleIQ.Core.Interfaces
+@inject IVideoStorageService VideoStorageService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Upload Match Video — PickleIQ</PageTitle>
+
+<div class="container mt-4" style="max-width: 600px;">
+    <h1>Upload Your Match Video</h1>
+    <p class="text-muted">Upload an MP4 of your match and receive an AI-generated highlight reel and coaching report.</p>
+
+    @if (!_uploading)
+    {
+        <div class="mb-3">
+            <label class="form-label">Select MP4 file (max 2GB)</label>
+            <InputFile OnChange="OnFileSelected" accept=".mp4" class="form-control" />
+        </div>
+
+        @if (_selectedFile is not null)
+        {
+            <p class="text-secondary">Selected: <strong>@_selectedFile.Name</strong> (@FormatBytes(_selectedFile.Size))</p>
+
+            @if (_selectedFile.Size > MaxFileSizeBytes)
+            {
+                <div class="alert alert-danger">File exceeds the 2GB limit. Please select a smaller file.</div>
+            }
+            else
+            {
+                <button class="btn btn-primary" @onclick="UploadAsync">Analyze Video</button>
+            }
+        }
+
+        @if (_errorMessage is not null)
+        {
+            <div class="alert alert-danger mt-3">@_errorMessage</div>
+        }
+    }
+
+    @if (_uploading)
+    {
+        <div class="text-center mt-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">Uploading your video, please wait...</p>
+        </div>
+    }
+</div>
+
+@code {
+    private const long MaxFileSizeBytes = 2L * 1024 * 1024 * 1024;
+
+    private IBrowserFile? _selectedFile;
+    private bool _uploading;
+    private string? _errorMessage;
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
+        _errorMessage = null;
+    }
+
+    private async Task UploadAsync()
+    {
+        if (_selectedFile is null) return;
+
+        _uploading = true;
+        _errorMessage = null;
+
+        try
+        {
+            await using var stream = _selectedFile.OpenReadStream(MaxFileSizeBytes);
+            var jobId = await VideoStorageService.SaveAsync(stream, _selectedFile.Name, _selectedFile.Size);
+            Navigation.NavigateTo($"/results/{jobId}");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Upload failed: {ex.Message}";
+            _uploading = false;
+        }
+    }
+
+    private static string FormatBytes(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024} KB",
+        < 1024 * 1024 * 1024 => $"{bytes / (1024 * 1024)} MB",
+        _ => $"{bytes / (1024L * 1024 * 1024):F1} GB"
+    };
+}
