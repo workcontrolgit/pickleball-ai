@@ -91,20 +91,16 @@ Open the project folder in VS Code (`File → Open Folder → pickleball-ai`), t
 dotnet run --project src/PickleIQ.Web
 ```
 
-**Terminal 2 — API (Hangfire dashboard)**
+Open `https://localhost:5001/upload` to upload a match video. Results appear at `https://localhost:5001/results/{jobId}`.
+
+> **Tip:** Watch the terminal for log output — it shows each pipeline stage (rally detection → highlight generation → coaching report) as it runs.
+
+**Terminal 2 — API (optional, Hangfire dashboard only)**
 ```bash
 dotnet run --project src/PickleIQ.Api
 ```
 
-Once both are running, open your browser:
-
-| URL | What it is |
-|-----|-----------|
-| `https://localhost:5001/upload` | Upload a match video |
-| `https://localhost:5001/results/{jobId}` | Live processing progress and results |
-| `http://localhost:5000/hangfire` | Hangfire job queue dashboard |
-
-> **Tip:** Watch the Web terminal for log output — it shows each pipeline stage (rally detection → highlight generation → coaching report) in real time.
+Only needed if you want to inspect the job queue at `http://localhost:5000/hangfire`. Not required for normal use.
 
 ## Project Structure
 
