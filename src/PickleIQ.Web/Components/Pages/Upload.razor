@@ -14,28 +14,23 @@
 <MudPaper MaxWidth="600px" Class="pa-6 mx-auto" Elevation="2">
     @if (!_uploading)
     {
-        <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected"
-                       Accept=".mp4,.MP4,.mov,.MOV"
-                       InputId="upload-input">
-            <CustomContent Context="fileUpload">
-                <div id="upload-drop-zone"
-                     class="upload-drop-zone @(_isDragging ? "dragging" : "")"
-                     @ondragenter="@(() => _isDragging = true)"
-                     @ondragleave="@(() => _isDragging = false)"
-                     @onclick="fileUpload.OpenFilePickerAsync">
-                    <MudStack AlignItems="AlignItems.Center" Spacing="2">
-                        <MudIcon Icon="@Icons.Material.Filled.CloudUpload"
-                                 Color="@(_isDragging ? Color.Primary : Color.Secondary)"
-                                 Style="font-size:3rem;" />
-                        <MudText Typo="Typo.h6">
-                            @(_isDragging ? "Drop to upload" : "Drag & drop your video here")
-                        </MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">or click to browse</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">MP4 or MOV · up to 5 GB</MudText>
-                    </MudStack>
-                </div>
-            </CustomContent>
-        </MudFileUpload>
+        @* Hidden native file input — Blazor reads files from this *@
+        <InputFile id="upload-input" style="display:none"
+                   accept=".mp4,.MP4,.mov,.MOV"
+                   OnChange="OnFileSelected" />
+
+        <div id="upload-drop-zone" class="upload-drop-zone">
+            <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.CloudUpload"
+                         Color="@(_isDragging ? Color.Primary : Color.Secondary)"
+                         Style="font-size:3rem;" />
+                <MudText Typo="Typo.h6">
+                    @(_isDragging ? "Drop to upload" : "Drag & drop your video here")
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">or click to browse</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">MP4 or MOV · up to 5 GB</MudText>
+            </MudStack>
+        </div>
 
         @if (_selectedFile is not null)
         {
@@ -81,16 +76,27 @@
     private bool _uploading;
     private bool _isDragging;
     private string? _errorMessage;
+    private DotNetObjectReference<Upload>? _dotNetRef;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
-            await JS.InvokeVoidAsync("initUploadDropZone", "upload-drop-zone", "upload-input");
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("initUploadDropZone", "upload-drop-zone", "upload-input", _dotNetRef);
+        }
     }
 
-    private void OnFileSelected(IBrowserFile file)
+    [JSInvokable]
+    public void SetDragging(bool dragging)
     {
-        _selectedFile = file;
+        _isDragging = dragging;
+        StateHasChanged();
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _selectedFile = e.File;
         _isDragging = false;
         _errorMessage = null;
     }
@@ -114,6 +120,8 @@
             _uploading = false;
         }
     }
+
+    public void Dispose() => _dotNetRef?.Dispose();
 
     private static string FormatBytes(long bytes) => bytes switch
     {
