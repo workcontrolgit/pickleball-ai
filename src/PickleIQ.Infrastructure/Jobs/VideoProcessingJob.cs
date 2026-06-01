@@ -71,9 +71,7 @@ public class VideoProcessingJob(
                 RallyCount: savedSegments.Count,
                 AverageRallySeconds: durations.Count > 0 ? durations.Average() : 0,
                 LongestRallySeconds: durations.Count > 0 ? durations.Max() : 0,
-                TotalMatchSeconds: 0, // duration from video metadata — set to 0 for MVP
-                CoachingFrames: Array.Empty<byte[]>()
-            );
+                TotalMatchSeconds: 0);
 
             var htmlReport = await coachingEngine.GenerateReportHtmlAsync(summary);
 

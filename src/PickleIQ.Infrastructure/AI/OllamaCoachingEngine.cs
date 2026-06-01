@@ -9,7 +9,10 @@ public class OllamaCoachingEngine(
     IConfiguration configuration,
     ILogger<OllamaCoachingEngine> logger) : ICoachingEngine
 {
-    public async Task<string> GenerateReportHtmlAsync(MatchSummary summary, CancellationToken cancellationToken = default)
+    public async Task<string> GenerateReportHtmlAsync(
+        MatchSummary summary,
+        IReadOnlyList<byte[]>? coachingFrames = null,
+        CancellationToken cancellationToken = default)
     {
         var endpoint = configuration["Ollama:Endpoint"] ?? "http://localhost:11434";
         var model = configuration["Ollama:Model"] ?? "nemotron-mini";

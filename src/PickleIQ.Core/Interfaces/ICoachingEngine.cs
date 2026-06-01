@@ -4,10 +4,12 @@ public record MatchSummary(
     int RallyCount,
     double AverageRallySeconds,
     double LongestRallySeconds,
-    double TotalMatchSeconds,
-    IReadOnlyList<byte[]> CoachingFrames);
+    double TotalMatchSeconds);
 
 public interface ICoachingEngine
 {
-    Task<string> GenerateReportHtmlAsync(MatchSummary summary, CancellationToken cancellationToken = default);
+    Task<string> GenerateReportHtmlAsync(
+        MatchSummary summary,
+        IReadOnlyList<byte[]>? coachingFrames = null,
+        CancellationToken cancellationToken = default);
 }

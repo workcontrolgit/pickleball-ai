@@ -4,6 +4,6 @@ public interface ICoachingFrameSampler
 {
     Task<IReadOnlyList<byte[]>> SampleAsync(
         string videoPath,
-        IList<(double StartSeconds, double EndSeconds)> rallies,
+        IReadOnlyList<(double StartSeconds, double EndSeconds)> rallies,
         CancellationToken cancellationToken = default);
 }
