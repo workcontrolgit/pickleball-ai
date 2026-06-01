@@ -53,6 +53,8 @@ public class CoachingFrameSampler(
 
                         if (File.Exists(framePath))
                             frames.Add(await File.ReadAllBytesAsync(framePath, cancellationToken));
+                        else
+                            logger.LogWarning("FFmpeg ran successfully but frame file not found at {FramePath}", framePath);
                     }
                     catch (Exception ex)
                     {
