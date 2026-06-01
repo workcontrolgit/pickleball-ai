@@ -2,6 +2,7 @@
 @using PickleIQ.Core.Interfaces
 @inject IVideoStorageService VideoStorageService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <PageTitle>Upload Match Video — PickleIQ</PageTitle>
 
@@ -13,14 +14,14 @@
 <MudPaper MaxWidth="600px" Class="pa-6 mx-auto" Elevation="2">
     @if (!_uploading)
     {
-        <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected" Accept=".mp4,.MP4,.mov,.MOV"
-                       @ref="_fileUpload">
+        <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected"
+                       Accept=".mp4,.MP4,.mov,.MOV"
+                       InputId="upload-input">
             <CustomContent Context="fileUpload">
-                <div class="upload-drop-zone @(_isDragging ? "dragging" : "")"
+                <div id="upload-drop-zone"
+                     class="upload-drop-zone @(_isDragging ? "dragging" : "")"
                      @ondragenter="@(() => _isDragging = true)"
                      @ondragleave="@(() => _isDragging = false)"
-                     @ondragover:preventDefault
-                     @ondrop:preventDefault
                      @onclick="fileUpload.OpenFilePickerAsync">
                     <MudStack AlignItems="AlignItems.Center" Spacing="2">
                         <MudIcon Icon="@Icons.Material.Filled.CloudUpload"
@@ -76,11 +77,16 @@
 @code {
     private const long MaxFileSizeBytes = 5L * 1024 * 1024 * 1024;
 
-    private MudFileUpload<IBrowserFile>? _fileUpload;
     private IBrowserFile? _selectedFile;
     private bool _uploading;
     private bool _isDragging;
     private string? _errorMessage;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("initUploadDropZone", "upload-drop-zone", "upload-input");
+    }
 
     private void OnFileSelected(IBrowserFile file)
     {
