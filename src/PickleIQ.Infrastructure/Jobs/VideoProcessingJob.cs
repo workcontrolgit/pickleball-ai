@@ -9,6 +9,7 @@ namespace PickleIQ.Infrastructure.Jobs;
 public class VideoProcessingJob(
     AppDbContext db,
     IRallyDetectionService rallyDetectionService,
+    ICoachingFrameSampler frameSampler,
     IHighlightGenerationService highlightGenerationService,
     ICoachingEngine coachingEngine,
     ILogger<VideoProcessingJob> logger) : IVideoProcessingJob
@@ -60,7 +61,10 @@ public class VideoProcessingJob(
 
             logger.LogInformation("Job {JobId}: highlight reel at {Path}", jobId, highlightPath);
 
-            // Step 3: Coaching Report
+            // Step 3: Sample coaching frames
+            var coachingFrames = await frameSampler.SampleAsync(job.FilePath, (IReadOnlyList<(double StartSeconds, double EndSeconds)>)segments);
+
+            // Step 4: Coaching Report
             job.Status = VideoJobStatus.ReportInProgress;
             await db.SaveChangesAsync();
 
@@ -73,13 +77,13 @@ public class VideoProcessingJob(
                 LongestRallySeconds: durations.Count > 0 ? durations.Max() : 0,
                 TotalMatchSeconds: 0);
 
-            var htmlReport = await coachingEngine.GenerateReportHtmlAsync(summary);
+            var report = await coachingEngine.GenerateReportHtmlAsync(summary, coachingFrames);
 
             db.CoachingReports.Add(new CoachingReport
             {
                 Id = Guid.NewGuid(),
                 VideoJobId = jobId,
-                HtmlContent = htmlReport
+                HtmlContent = report
             });
 
             job.Status = VideoJobStatus.ReportComplete;
