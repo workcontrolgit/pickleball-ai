@@ -7,9 +7,9 @@ using PickleIQ.Core.Interfaces;
 
 namespace PickleIQ.Infrastructure.AI;
 
-public class QwenVisionCoachingEngine(
+public class OllamaVisionCoachingEngine(
     IConfiguration configuration,
-    ILogger<QwenVisionCoachingEngine> logger) : ICoachingEngine
+    ILogger<OllamaVisionCoachingEngine> logger) : ICoachingEngine
 {
     public async Task<string> GenerateReportHtmlAsync(
         MatchSummary summary,
@@ -104,6 +104,6 @@ public class QwenVisionCoachingEngine(
          - Longest rally: {summary.LongestRallySeconds:F1} seconds
          - Total match: {summary.TotalMatchSeconds / 60:F0} minutes
 
-         Start Ollama locally with `ollama run qwen2-vl:7b` and reprocess to get AI coaching feedback.
+         Start Ollama locally and run your configured model, then reprocess to get AI coaching feedback.
          """;
 }
