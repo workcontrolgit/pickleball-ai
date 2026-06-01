@@ -68,7 +68,7 @@ else
         <MudStack Spacing="3">
             @foreach (var job in _jobs)
             {
-                <MudCard Elevation="2">
+                <MudCard @key="job.Id" Elevation="2">
                     <MudCardContent>
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-1">
                             <MudText Typo="Typo.body1" Style="font-weight:600">@job.FileName</MudText>
@@ -138,6 +138,7 @@ else
     private async Task RetryAsync(Guid jobId)
     {
         _retrying.Add(jobId);
+        await InvokeAsync(StateHasChanged);
         var job = await Db.VideoJobs.FindAsync(jobId);
         if (job is not null && (job.Status == VideoJobStatus.Failed || job.Status == VideoJobStatus.ReportComplete))
         {
@@ -149,7 +150,15 @@ else
             job.HighlightFilePath = null;
             job.CompletedAt = null;
             await Db.SaveChangesAsync();
-            JobClient.Enqueue<VideoProcessingJob>(j => j.ProcessAsync(jobId));
+            try
+            {
+                JobClient.Enqueue<VideoProcessingJob>(j => j.ProcessAsync(jobId));
+            }
+            catch
+            {
+                // Enqueue failed after commit — job is left Queued but no worker will pick it up.
+                // The user can retry again from My Videos.
+            }
         }
         _retrying.Remove(jobId);
         await LoadJobsAsync();
@@ -158,6 +167,7 @@ else
     private async Task DeleteAsync(Guid jobId)
     {
         _deleting.Add(jobId);
+        await InvokeAsync(StateHasChanged);
         var job = await Db.VideoJobs.FindAsync(jobId);
         if (job is not null)
         {

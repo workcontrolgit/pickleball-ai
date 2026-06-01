@@ -4,6 +4,7 @@
 @using PickleIQ.Infrastructure.Data
 @using Hangfire
 @using PickleIQ.Infrastructure.Jobs
+@using Markdig
 @inject AppDbContext Db
 @inject NavigationManager Navigation
 @inject IBackgroundJobClient JobClient
@@ -12,103 +13,150 @@
 
 <PageTitle>Results — PickleIQ</PageTitle>
 
-<div class="container mt-4" style="max-width: 800px;">
-    <h1>Match Results</h1>
+<MudText Typo="Typo.h4" Class="mb-4">Match Results</MudText>
 
-    @if (_job is null)
-    {
-        <div class="text-center mt-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <p class="mt-2">Loading job status...</p>
-        </div>
-    }
-    else if (_job.Status == VideoJobStatus.Failed)
-    {
-        <div class="alert alert-danger">
-            <h5>Processing failed</h5>
-            <p>@(_job.ErrorMessage ?? "An unexpected error occurred.")</p>
-            <small class="text-muted">Job ID: @JobId</small>
-        </div>
-        <button class="btn btn-warning me-2" @onclick="RetryAsync" disabled="@_retrying">
+@if (_job is null)
+{
+    <MudStack AlignItems="AlignItems.Center" Class="mt-8" Spacing="3">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Color="Color.Secondary">Loading job status...</MudText>
+    </MudStack>
+}
+else if (_job.Status == VideoJobStatus.Failed)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-4">
+        <MudText Typo="Typo.h6">Processing failed</MudText>
+        <MudText>@(_job.ErrorMessage ?? "An unexpected error occurred.")</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Job ID: @JobId</MudText>
+    </MudAlert>
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="RetryAsync" Disabled="_retrying">
             @(_retrying ? "Retrying…" : "Retry")
-        </button>
-        <a href="/upload" class="btn btn-primary">Try another video</a>
-    }
-    else if (_job.Status != VideoJobStatus.ReportComplete)
+        </MudButton>
+        <MudButton Href="/upload" Variant="Variant.Filled" Color="Color.Primary">Try another video</MudButton>
+    </MudStack>
+}
+else if (_job.Status != VideoJobStatus.ReportComplete)
+{
+    <MudStack AlignItems="AlignItems.Center" Class="mt-6" Spacing="4">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+        <MudText Color="Color.Secondary">@StatusMessage(_job.Status)</MudText>
+        <MudProgressLinear Color="Color.Primary" Striped="true" Rounded="true"
+                           Value="@ProgressPercent(_job.Status)" Class="my-2" Style="width:100%;max-width:400px;" />
+        <MudText Typo="Typo.body2" Color="Color.Secondary">Job ID: @JobId</MudText>
+    </MudStack>
+}
+else
+{
+    <!-- Rally Statistics -->
+    <MudText Typo="Typo.h5" Class="mb-3">Rally Statistics</MudText>
+    <MudGrid Spacing="3" Class="mb-4">
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="2" Class="pa-4 text-center">
+                <MudText Typo="Typo.h3" Color="Color.Primary">@_segments.Count</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Rallies Detected</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="2" Class="pa-4 text-center">
+                <MudText Typo="Typo.h3" Color="Color.Primary">
+                    @(_segments.Count > 0 ? _segments.Average(s => s.DurationSeconds).ToString("F1") : "—")s
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Avg Rally Length</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="2" Class="pa-4 text-center">
+                <MudText Typo="Typo.h3" Color="Color.Primary">
+                    @(_segments.Count > 0 ? _segments.Max(s => s.DurationSeconds).ToString("F1") : "—")s
+                </MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Longest Rally</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    @if (!string.IsNullOrEmpty(_job.HighlightFilePath))
     {
-        <div class="text-center mt-4">
-            <div class="spinner-border text-primary" role="status"></div>
-            <p class="mt-2 text-muted">@StatusMessage(_job.Status)</p>
-            <div class="progress mt-2" style="height: 8px;">
-                <div class="progress-bar progress-bar-striped progress-bar-animated"
-                     style="width: @ProgressPercent(_job.Status)%"></div>
-            </div>
-            <small class="text-muted mt-2 d-block">Job ID: @JobId</small>
-        </div>
+        <MudButton Href="@DownloadUrl" Variant="Variant.Filled" Color="Color.Success" Class="mb-4"
+                   StartIcon="@Icons.Material.Filled.Download">
+            Download Highlight Reel
+        </MudButton>
+    }
+
+    <!-- File Info -->
+    <MudText Typo="Typo.h5" Class="mb-2 mt-4">File Info</MudText>
+    <MudSimpleTable Elevation="1" Class="mb-4">
+        <thead>
+            <tr>
+                <th>File</th>
+                <th>Path on Disk</th>
+                <th>Size</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><MudText Typo="Typo.body2" Color="Color.Secondary">Source Video</MudText></td>
+                <td><MudText Typo="Typo.body2" Style="font-family:monospace;word-break:break-all;">@_job.FilePath</MudText></td>
+                <td><MudText Typo="Typo.body2">@FormatSize(_sourceSize)</MudText></td>
+                <td><MudText Typo="Typo.body2">@_sourceDate?.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</MudText></td>
+            </tr>
+            @if (!string.IsNullOrEmpty(_job.HighlightFilePath))
+            {
+                <tr>
+                    <td><MudText Typo="Typo.body2" Color="Color.Secondary">Highlight Reel</MudText></td>
+                    <td><MudText Typo="Typo.body2" Style="font-family:monospace;word-break:break-all;">@_job.HighlightFilePath</MudText></td>
+                    <td><MudText Typo="Typo.body2">@FormatSize(_highlightSize)</MudText></td>
+                    <td><MudText Typo="Typo.body2">@_highlightDate?.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</MudText></td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+
+    <!-- Coaching Report -->
+    <MudText Typo="Typo.h5" Class="mb-2 mt-4">Coaching Report</MudText>
+    @if (_report is not null)
+    {
+        <MudPaper Elevation="1" Class="pa-4 mb-4">
+            <div class="coaching-report">@((MarkupString)Markdown.ToHtml(_report.HtmlContent, _markdigPipeline))</div>
+        </MudPaper>
     }
     else
     {
-        <!-- Complete -->
-        <div class="mb-4">
-            <div class="d-flex justify-content-between align-items-center">
-                <h4>Rally Statistics</h4>
-                @if (!string.IsNullOrEmpty(_job.HighlightFilePath))
-                {
-                    <a href="@DownloadUrl" class="btn btn-success" download>
-                        Download Highlight Reel
-                    </a>
-                }
-            </div>
-            <div class="row mt-2">
-                <div class="col text-center border rounded p-3 me-2">
-                    <div class="fs-2 fw-bold">@_segments.Count</div>
-                    <div class="text-muted small">Rallies Detected</div>
-                </div>
-                <div class="col text-center border rounded p-3 me-2">
-                    <div class="fs-2 fw-bold">@(_segments.Count > 0 ? _segments.Average(s => s.DurationSeconds).ToString("F1") : "—")s</div>
-                    <div class="text-muted small">Avg Rally Length</div>
-                </div>
-                <div class="col text-center border rounded p-3">
-                    <div class="fs-2 fw-bold">@(_segments.Count > 0 ? _segments.Max(s => s.DurationSeconds).ToString("F1") : "—")s</div>
-                    <div class="text-muted small">Longest Rally</div>
-                </div>
-            </div>
-        </div>
-
-        <hr />
-
-        <h4>Coaching Report</h4>
-        @if (_report is not null)
-        {
-            <div>@((MarkupString)_report.HtmlContent)</div>
-        }
-        else
-        {
-            <p class="text-muted">Coaching report not available.</p>
-        }
-
-        <hr />
-        <div class="text-center mt-3">
-            <a href="/upload" class="btn btn-outline-primary">Analyze another video</a>
-            @if (!string.IsNullOrEmpty(_job.HighlightFilePath))
-            {
-                <a href="@DownloadUrl" class="btn btn-success ms-2" download>Download Highlight Reel</a>
-            }
-            <button class="btn btn-outline-warning ms-2" @onclick="RetryAsync" disabled="@_retrying">
-                @(_retrying ? "Reprocessing…" : "Reprocess")
-            </button>
-        </div>
+        <MudText Color="Color.Secondary">Coaching report not available.</MudText>
     }
-</div>
+
+    <MudStack Row="true" Spacing="2" Class="mt-4" Wrap="Wrap.Wrap">
+        <MudButton Href="/upload" Variant="Variant.Outlined" Color="Color.Primary">Analyze another video</MudButton>
+        @if (!string.IsNullOrEmpty(_job.HighlightFilePath))
+        {
+            <MudButton Href="@DownloadUrl" Variant="Variant.Filled" Color="Color.Success"
+                       StartIcon="@Icons.Material.Filled.Download">
+                Download Highlight Reel
+            </MudButton>
+        }
+        <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="RetryAsync" Disabled="_retrying">
+            @(_retrying ? "Reprocessing…" : "Reprocess")
+        </MudButton>
+    </MudStack>
+}
 
 @code {
     [Parameter] public Guid JobId { get; set; }
+
+    private static readonly MarkdownPipeline _markdigPipeline =
+        new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
 
     private VideoJob? _job;
     private List<RallySegment> _segments = [];
     private CoachingReport? _report;
     private System.Threading.Timer? _pollTimer;
     private bool _retrying;
+
+    private long? _sourceSize;
+    private DateTime? _sourceDate;
+    private long? _highlightSize;
+    private DateTime? _highlightDate;
 
     private string DownloadUrl => $"/download/{JobId}/highlights";
 
@@ -122,9 +170,8 @@
             {
                 await RefreshAsync();
                 await InvokeAsync(StateHasChanged);
-
                 if (_job?.Status == VideoJobStatus.ReportComplete || _job?.Status == VideoJobStatus.Failed)
-                    await _pollTimer!.DisposeAsync();
+                    await DisposeTimerAsync();
             }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
         }
     }
@@ -141,8 +188,34 @@
 
             _report = await Db.CoachingReports.AsNoTracking()
                 .FirstOrDefaultAsync(r => r.VideoJobId == JobId);
+
+            LoadFileInfo(_job);
         }
     }
+
+    private void LoadFileInfo(VideoJob job)
+    {
+        if (File.Exists(job.FilePath))
+        {
+            var info = new FileInfo(job.FilePath);
+            _sourceSize = info.Length;
+            _sourceDate = info.LastWriteTimeUtc;
+        }
+        if (!string.IsNullOrEmpty(job.HighlightFilePath) && File.Exists(job.HighlightFilePath))
+        {
+            var info = new FileInfo(job.HighlightFilePath);
+            _highlightSize = info.Length;
+            _highlightDate = info.LastWriteTimeUtc;
+        }
+    }
+
+    private static string FormatSize(long? bytes) => bytes switch
+    {
+        null => "—",
+        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+        < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
+        _ => $"{bytes / (1024.0 * 1024 * 1024):F2} GB"
+    };
 
     private static string StatusMessage(VideoJobStatus status) => status switch
     {
@@ -166,35 +239,47 @@
         _ => 10
     };
 
+    private async Task DisposeTimerAsync()
+    {
+        var t = _pollTimer;
+        _pollTimer = null;
+        if (t is not null)
+            await t.DisposeAsync();
+    }
+
     private async Task RetryAsync()
     {
+        await DisposeTimerAsync();
         _retrying = true;
+        StateHasChanged();
         var job = await Db.VideoJobs.FindAsync(JobId);
         if (job is not null && (job.Status == VideoJobStatus.Failed || job.Status == VideoJobStatus.ReportComplete))
         {
-            var segments = Db.RallySegments.Where(s => s.VideoJobId == JobId);
-            Db.RallySegments.RemoveRange(segments);
+            Db.RallySegments.RemoveRange(Db.RallySegments.Where(s => s.VideoJobId == JobId));
             var report = await Db.CoachingReports.FirstOrDefaultAsync(r => r.VideoJobId == JobId);
             if (report is not null) Db.CoachingReports.Remove(report);
-
             job.Status = VideoJobStatus.Queued;
             job.ErrorMessage = null;
             job.HighlightFilePath = null;
             job.CompletedAt = null;
             await Db.SaveChangesAsync();
-            JobClient.Enqueue<VideoProcessingJob>(j => j.ProcessAsync(JobId));
+            try
+            {
+                JobClient.Enqueue<VideoProcessingJob>(j => j.ProcessAsync(JobId));
+            }
+            catch
+            {
+                // Enqueue failed after commit — job is Queued but no worker dispatched. User can retry again.
+            }
         }
         _retrying = false;
-
-        // Resume polling
         await RefreshAsync();
         _pollTimer = new System.Threading.Timer(async _ =>
         {
             await RefreshAsync();
             await InvokeAsync(StateHasChanged);
-
             if (_job?.Status == VideoJobStatus.ReportComplete || _job?.Status == VideoJobStatus.Failed)
-                await _pollTimer!.DisposeAsync();
+                await DisposeTimerAsync();
         }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
     }
 
