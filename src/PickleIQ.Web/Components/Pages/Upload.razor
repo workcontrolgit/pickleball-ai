@@ -2,49 +2,65 @@
 @using PickleIQ.Core.Interfaces
 @inject IVideoStorageService VideoStorageService
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @rendermode InteractiveServer
 
 <PageTitle>Upload Match Video — PickleIQ</PageTitle>
 
-<div class="container mt-4" style="max-width: 600px;">
-    <h1>Upload Your Match Video</h1>
-    <p class="text-muted">Upload an MP4 of your match and receive an AI-generated highlight reel and coaching report.</p>
+<MudText Typo="Typo.h4" Class="mb-1">Upload Your Match Video</MudText>
+<MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-6">
+    Upload an MP4 of your match and receive an AI-generated highlight reel and coaching report.
+</MudText>
 
+<MudPaper MaxWidth="600px" Class="pa-6 mx-auto" Elevation="2">
     @if (!_uploading)
     {
-        <div class="mb-3">
-            <label class="form-label">Select MP4 file (max 2GB)</label>
-            <InputFile OnChange="OnFileSelected" accept=".mp4" class="form-control" />
+        <div style="display:none;">
+            <InputFile id="fileInput" OnChange="OnFileSelected" accept=".mp4,.MP4,.mov,.MOV" />
         </div>
+
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.CloudUpload" FullWidth="true"
+                   Size="Size.Large" Class="mb-3" Style="height:80px;"
+                   OnClick="SelectFile">
+            Click to select video file
+        </MudButton>
 
         @if (_selectedFile is not null)
         {
-            <p class="text-secondary">Selected: <strong>@_selectedFile.Name</strong> (@FormatBytes(_selectedFile.Size))</p>
+            <MudText Class="mb-2">
+                Selected: <strong>@_selectedFile.Name</strong> (@FormatBytes(_selectedFile.Size))
+            </MudText>
 
             @if (_selectedFile.Size > MaxFileSizeBytes)
             {
-                <div class="alert alert-danger">File exceeds the 2GB limit. Please select a smaller file.</div>
+                <MudAlert Severity="Severity.Error" Class="mb-3">
+                    File exceeds the 2GB limit. Please select a smaller file.
+                </MudAlert>
             }
             else
             {
-                <button class="btn btn-primary" @onclick="UploadAsync">Analyze Video</button>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                           Size="Size.Large" OnClick="UploadAsync"
+                           StartIcon="@Icons.Material.Filled.Analytics">
+                    Analyze Video
+                </MudButton>
             }
         }
 
         @if (_errorMessage is not null)
         {
-            <div class="alert alert-danger mt-3">@_errorMessage</div>
+            <MudAlert Severity="Severity.Error" Class="mt-4">@_errorMessage</MudAlert>
         }
     }
-
-    @if (_uploading)
+    else
     {
-        <div class="text-center mt-4">
-            <div class="spinner-border text-primary" role="status"></div>
-            <p class="mt-2">Uploading your video, please wait...</p>
-        </div>
+        <MudStack AlignItems="AlignItems.Center" Spacing="4" Class="py-4">
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+            <MudText>Uploading your video, please wait...</MudText>
+        </MudStack>
     }
-</div>
+</MudPaper>
 
 @code {
     private const long MaxFileSizeBytes = 2L * 1024 * 1024 * 1024;
@@ -52,6 +68,11 @@
     private IBrowserFile? _selectedFile;
     private bool _uploading;
     private string? _errorMessage;
+
+    private async Task SelectFile()
+    {
+        await JS.InvokeVoidAsync("eval", "document.getElementById('fileInput').click()");
+    }
 
     private void OnFileSelected(InputFileChangeEventArgs e)
     {
