@@ -13,27 +13,39 @@
 <MudPaper MaxWidth="600px" Class="pa-6 mx-auto" Elevation="2">
     @if (!_uploading)
     {
-        <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected" Accept=".mp4,.MP4,.mov,.MOV">
+        <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected" Accept=".mp4,.MP4,.mov,.MOV"
+                       OnDragEnter="@(() => _isDragging = true)"
+                       OnDragLeave="@(() => _isDragging = false)"
+                       OnDrop="@(() => _isDragging = false)">
             <CustomContent Context="fileUpload">
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
-                           StartIcon="@Icons.Material.Filled.CloudUpload" FullWidth="true"
-                           Size="Size.Large" Class="mb-3" Style="height:80px;"
-                           OnClick="@fileUpload.OpenFilePickerAsync">
-                    Click to select video file
-                </MudButton>
+                <MudPaper Outlined="true" Class="pa-8 rounded-lg"
+                          Style="@DropZoneStyle"
+                          @onclick="fileUpload.OpenFilePickerAsync">
+                    <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Filled.CloudUpload"
+                                 Color="@(_isDragging ? Color.Primary : Color.Secondary)"
+                                 Style="font-size:3rem;" />
+                        <MudText Typo="Typo.h6" Color="@(_isDragging ? Color.Primary : Color.Default)">
+                            @(_isDragging ? "Drop to upload" : "Drag & drop your video here")
+                        </MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">or click to browse</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">MP4 or MOV · up to 2 GB</MudText>
+                    </MudStack>
+                </MudPaper>
             </CustomContent>
         </MudFileUpload>
 
         @if (_selectedFile is not null)
         {
-            <MudText Class="mb-2">
-                Selected: <strong>@_selectedFile.Name</strong> (@FormatBytes(_selectedFile.Size))
-            </MudText>
+            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-4 mb-2" Spacing="2">
+                <MudIcon Icon="@Icons.Material.Filled.VideoFile" Color="Color.Primary" />
+                <MudText><strong>@_selectedFile.Name</strong> — @FormatBytes(_selectedFile.Size)</MudText>
+            </MudStack>
 
             @if (_selectedFile.Size > MaxFileSizeBytes)
             {
                 <MudAlert Severity="Severity.Error" Class="mb-3">
-                    File exceeds the 2GB limit. Please select a smaller file.
+                    File exceeds the 2 GB limit. Please select a smaller file.
                 </MudAlert>
             }
             else
@@ -65,7 +77,13 @@
 
     private IBrowserFile? _selectedFile;
     private bool _uploading;
+    private bool _isDragging;
     private string? _errorMessage;
+
+    private string DropZoneStyle =>
+        _isDragging
+            ? "cursor:pointer;border-color:var(--mud-palette-primary);background:var(--mud-palette-primary-lighten);transition:all .2s;"
+            : "cursor:pointer;border-style:dashed;transition:all .2s;";
 
     private void OnFileSelected(IBrowserFile file)
     {
