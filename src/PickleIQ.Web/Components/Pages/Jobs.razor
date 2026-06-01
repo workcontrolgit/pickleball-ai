@@ -10,101 +10,91 @@
 
 <PageTitle>My Videos — PickleIQ</PageTitle>
 
-<div class="container mt-4" style="max-width: 860px;">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="mb-0">My Videos</h1>
-        <a href="/upload" class="btn btn-primary">+ Upload Video</a>
-    </div>
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-4">
+    <MudText Typo="Typo.h4">My Videos</MudText>
+    <MudButton Href="/upload" Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.CloudUpload">
+        Upload Video
+    </MudButton>
+</MudStack>
 
-    @if (_jobs is null)
-    {
-        <div class="text-center mt-5">
-            <div class="spinner-border text-primary" role="status"></div>
-        </div>
-    }
-    else if (_jobs.Count == 0)
-    {
-        <div class="text-center mt-5 text-muted">
-            <p>No videos uploaded yet.</p>
-            <a href="/upload" class="btn btn-primary">Upload your first video</a>
-        </div>
-    }
-    else
-    {
-        <table class="table table-hover align-middle">
-            <thead>
-                <tr>
-                    <th>File</th>
-                    <th>Status</th>
-                    <th>Uploaded</th>
-                    <th class="text-end">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var job in _jobs)
-                {
-                    <tr>
-                        <td>
-                            <span class="fw-semibold">@job.FileName</span>
-                        </td>
-                        <td>
-                            <span class="badge @BadgeClass(job.Status)">@StatusLabel(job.Status)</span>
-                        </td>
-                        <td class="text-muted small">@job.CreatedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</td>
-                        <td class="text-end">
-                            @if (job.Status == VideoJobStatus.ReportComplete)
-                            {
-                                <a href="/results/@job.Id" class="btn btn-sm btn-outline-success me-1">View Results</a>
-                                @if (!string.IsNullOrEmpty(job.HighlightFilePath))
-                                {
-                                    <a href="/download/@job.Id/highlights" class="btn btn-sm btn-success me-1" download>Download</a>
-                                }
-                                <button class="btn btn-sm btn-outline-warning me-1"
-                                        @onclick="() => RetryAsync(job.Id)"
-                                        disabled="@_retrying.Contains(job.Id)">
-                                    @(_retrying.Contains(job.Id) ? "Retrying…" : "Reprocess")
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger"
-                                        @onclick="() => DeleteAsync(job.Id)"
-                                        disabled="@_deleting.Contains(job.Id)">
-                                    Delete
-                                </button>
-                            }
-                            else if (job.Status == VideoJobStatus.Failed)
-                            {
-                                <button class="btn btn-sm btn-warning me-1"
-                                        @onclick="() => RetryAsync(job.Id)"
-                                        disabled="@_retrying.Contains(job.Id)">
-                                    @(_retrying.Contains(job.Id) ? "Retrying…" : "Retry")
-                                </button>
-                                <a href="/results/@job.Id" class="btn btn-sm btn-outline-secondary me-1">Details</a>
-                                <button class="btn btn-sm btn-outline-danger"
-                                        @onclick="() => DeleteAsync(job.Id)"
-                                        disabled="@_deleting.Contains(job.Id)">
-                                    Delete
-                                </button>
-                            }
-                            else
-                            {
-                                <a href="/results/@job.Id" class="btn btn-sm btn-outline-primary">View Progress</a>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    }
-</div>
+@if (_jobs is null)
+{
+    <MudStack AlignItems="AlignItems.Center" Class="mt-8">
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    </MudStack>
+}
+else if (_jobs.Count == 0)
+{
+    <MudStack AlignItems="AlignItems.Center" Class="mt-8" Spacing="4">
+        <MudText Color="Color.Secondary">No videos uploaded yet.</MudText>
+        <MudButton Href="/upload" Variant="Variant.Filled" Color="Color.Primary">Upload your first video</MudButton>
+    </MudStack>
+}
+else
+{
+    <!-- Desktop table -->
+    <MudHidden Breakpoint="Breakpoint.SmAndDown">
+        <MudTable Items="_jobs" Hover="true" Elevation="2">
+            <HeaderContent>
+                <MudTh>File</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Uploaded</MudTh>
+                <MudTh Style="text-align:right">Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>
+                    <MudText Typo="Typo.body2" Style="font-weight:600">@context.FileName</MudText>
+                </MudTd>
+                <MudTd>
+                    <MudChip T="string" Color="@ChipColor(context.Status)" Size="Size.Small">
+                        @StatusLabel(context.Status)
+                    </MudChip>
+                </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        @context.CreatedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                    </MudText>
+                </MudTd>
+                <MudTd Style="text-align:right">
+                    @ActionButtons(context)
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudHidden>
+
+    <!-- Mobile cards -->
+    <MudHidden Breakpoint="Breakpoint.MdAndUp">
+        <MudStack Spacing="3">
+            @foreach (var job in _jobs)
+            {
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-1">
+                            <MudText Typo="Typo.body1" Style="font-weight:600">@job.FileName</MudText>
+                            <MudChip T="string" Color="@ChipColor(job.Status)" Size="Size.Small">
+                                @StatusLabel(job.Status)
+                            </MudChip>
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                            @job.CreatedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                        </MudText>
+                        <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                            @ActionButtons(job)
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            }
+        </MudStack>
+    </MudHidden>
+}
 
 @code {
     private List<VideoJob>? _jobs;
     private readonly HashSet<Guid> _retrying = [];
     private readonly HashSet<Guid> _deleting = [];
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadJobsAsync();
-    }
+    protected override async Task OnInitializedAsync() => await LoadJobsAsync();
 
     private async Task LoadJobsAsync()
     {
@@ -113,18 +103,47 @@
             .ToListAsync();
     }
 
+    private RenderFragment ActionButtons(VideoJob job) => __builder =>
+    {
+        if (job.Status == VideoJobStatus.ReportComplete)
+        {
+            <MudButton Href="@($"/results/{job.Id}")" Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small" Class="mr-1">View Results</MudButton>
+            @if (!string.IsNullOrEmpty(job.HighlightFilePath))
+            {
+                <MudButton Href="@($"/download/{job.Id}/highlights")" Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" Class="mr-1">Download</MudButton>
+            }
+            <MudButton OnClick="@(() => RetryAsync(job.Id))" Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small" Class="mr-1"
+                       Disabled="_retrying.Contains(job.Id)">
+                @(_retrying.Contains(job.Id) ? "Retrying…" : "Reprocess")
+            </MudButton>
+            <MudButton OnClick="@(() => DeleteAsync(job.Id))" Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                       Disabled="_deleting.Contains(job.Id)">Delete</MudButton>
+        }
+        else if (job.Status == VideoJobStatus.Failed)
+        {
+            <MudButton OnClick="@(() => RetryAsync(job.Id))" Variant="Variant.Filled" Color="Color.Warning" Size="Size.Small" Class="mr-1"
+                       Disabled="_retrying.Contains(job.Id)">
+                @(_retrying.Contains(job.Id) ? "Retrying…" : "Retry")
+            </MudButton>
+            <MudButton Href="@($"/results/{job.Id}")" Variant="Variant.Outlined" Color="Color.Inherit" Size="Size.Small" Class="mr-1">Details</MudButton>
+            <MudButton OnClick="@(() => DeleteAsync(job.Id))" Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                       Disabled="_deleting.Contains(job.Id)">Delete</MudButton>
+        }
+        else
+        {
+            <MudButton Href="@($"/results/{job.Id}")" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small">View Progress</MudButton>
+        }
+    };
+
     private async Task RetryAsync(Guid jobId)
     {
         _retrying.Add(jobId);
         var job = await Db.VideoJobs.FindAsync(jobId);
         if (job is not null && (job.Status == VideoJobStatus.Failed || job.Status == VideoJobStatus.ReportComplete))
         {
-            // Clear previous results so they don't accumulate
-            var segments = Db.RallySegments.Where(s => s.VideoJobId == jobId);
-            Db.RallySegments.RemoveRange(segments);
+            Db.RallySegments.RemoveRange(Db.RallySegments.Where(s => s.VideoJobId == jobId));
             var report = await Db.CoachingReports.FirstOrDefaultAsync(r => r.VideoJobId == jobId);
             if (report is not null) Db.CoachingReports.Remove(report);
-
             job.Status = VideoJobStatus.Queued;
             job.ErrorMessage = null;
             job.HighlightFilePath = null;
@@ -147,9 +166,18 @@
             if (report is not null) Db.CoachingReports.Remove(report);
             Db.VideoJobs.Remove(job);
             await Db.SaveChangesAsync();
+            DeleteFileIfExists(job.FilePath);
+            DeleteFileIfExists(job.HighlightFilePath);
         }
         _deleting.Remove(jobId);
         await LoadJobsAsync();
+    }
+
+    private static void DeleteFileIfExists(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
+        var normalized = path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        if (File.Exists(normalized)) File.Delete(normalized);
     }
 
     private static string StatusLabel(VideoJobStatus status) => status switch
@@ -165,11 +193,11 @@
         _ => "Processing"
     };
 
-    private static string BadgeClass(VideoJobStatus status) => status switch
+    private static Color ChipColor(VideoJobStatus status) => status switch
     {
-        VideoJobStatus.ReportComplete => "bg-success",
-        VideoJobStatus.Failed => "bg-danger",
-        VideoJobStatus.Queued => "bg-secondary",
-        _ => "bg-primary"
+        VideoJobStatus.ReportComplete => Color.Success,
+        VideoJobStatus.Failed => Color.Error,
+        VideoJobStatus.Queued => Color.Surface,
+        _ => Color.Primary
     };
 }
