@@ -1,3 +1,4 @@
+using FFMpegCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PickleIQ.Core.Entities;
@@ -61,8 +62,10 @@ public class VideoProcessingJob(
 
             logger.LogInformation("Job {JobId}: highlight reel at {Path}", jobId, highlightPath);
 
-            // Step 3: Sample coaching frames
+            // Step 3: Sample coaching frames + get video duration
             var coachingFrames = await frameSampler.SampleAsync(job.FilePath, (IReadOnlyList<(double StartSeconds, double EndSeconds)>)segments);
+            var mediaInfo = await FFProbe.AnalyseAsync(job.FilePath);
+            var totalMatchSeconds = mediaInfo.Duration.TotalSeconds;
 
             // Step 4: Coaching Report
             job.Status = VideoJobStatus.ReportInProgress;
@@ -75,7 +78,7 @@ public class VideoProcessingJob(
                 RallyCount: savedSegments.Count,
                 AverageRallySeconds: durations.Count > 0 ? durations.Average() : 0,
                 LongestRallySeconds: durations.Count > 0 ? durations.Max() : 0,
-                TotalMatchSeconds: 0);
+                TotalMatchSeconds: totalMatchSeconds);
 
             var report = await coachingEngine.GenerateReportHtmlAsync(summary, coachingFrames);
 
