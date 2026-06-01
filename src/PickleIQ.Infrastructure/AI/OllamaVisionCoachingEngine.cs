@@ -27,7 +27,8 @@ public class OllamaVisionCoachingEngine(
 
         try
         {
-            var client = new OllamaApiClient(new Uri(endpoint));
+            var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+            var client = new OllamaApiClient(httpClient, endpoint);
 
             var message = new Message
             {
