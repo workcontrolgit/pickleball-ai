@@ -1,6 +1,3 @@
-@inject NavigationManager Navigation
-@implements IDisposable
-
 <MudAppBar Elevation="1" Color="Color.Primary">
     <MudText Typo="Typo.h6" Class="ml-2" Style="font-weight:700;letter-spacing:.5px;">🥒 PickleIQ</MudText>
     <MudSpacer />
@@ -16,17 +13,3 @@
         <MudButton Href="/jobs" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.VideoLibrary" FullWidth="true">My Videos</MudButton>
     </MudAppBar>
 </MudHidden>
-
-@code {
-    protected override void OnInitialized()
-    {
-        Navigation.LocationChanged += OnLocationChanged;
-    }
-
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
-    {
-        // intentionally empty — state tracking not needed without MudBottomNavigation
-    }
-
-    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
-}
