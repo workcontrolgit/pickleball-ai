@@ -2,7 +2,6 @@
 @using PickleIQ.Core.Interfaces
 @inject IVideoStorageService VideoStorageService
 @inject NavigationManager Navigation
-@inject IJSRuntime JS
 @rendermode InteractiveServer
 
 <PageTitle>Upload Match Video — PickleIQ</PageTitle>
@@ -15,16 +14,16 @@
 <MudPaper MaxWidth="600px" Class="pa-6 mx-auto" Elevation="2">
     @if (!_uploading)
     {
-        <div style="display:none;">
-            <InputFile id="fileInput" OnChange="OnFileSelected" accept=".mp4,.MP4,.mov,.MOV" />
-        </div>
-
-        <MudButton Variant="Variant.Outlined" Color="Color.Primary"
-                   StartIcon="@Icons.Material.Filled.CloudUpload" FullWidth="true"
-                   Size="Size.Large" Class="mb-3" Style="height:80px;"
-                   OnClick="SelectFile">
-            Click to select video file
-        </MudButton>
+        <MudFileUpload T="IBrowserFile" FilesChanged="OnFileSelected" Accept=".mp4,.MP4,.mov,.MOV">
+            <CustomContent Context="fileUpload">
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                           StartIcon="@Icons.Material.Filled.CloudUpload" FullWidth="true"
+                           Size="Size.Large" Class="mb-3" Style="height:80px;"
+                           OnClick="@fileUpload.OpenFilePickerAsync">
+                    Click to select video file
+                </MudButton>
+            </CustomContent>
+        </MudFileUpload>
 
         @if (_selectedFile is not null)
         {
@@ -69,14 +68,9 @@
     private bool _uploading;
     private string? _errorMessage;
 
-    private async Task SelectFile()
+    private void OnFileSelected(IBrowserFile file)
     {
-        await JS.InvokeVoidAsync("eval", "document.getElementById('fileInput').click()");
-    }
-
-    private void OnFileSelected(InputFileChangeEventArgs e)
-    {
-        _selectedFile = e.File;
+        _selectedFile = file;
         _errorMessage = null;
     }
 
