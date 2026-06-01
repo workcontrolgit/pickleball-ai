@@ -1,4 +1,5 @@
 using FFMpegCore;
+using MudBlazor.Services;
 using Hangfire;
 using Hangfire.SqlServer;
 using Microsoft.EntityFrameworkCore;
@@ -62,6 +63,8 @@ try
 
     builder.Services.AddRazorComponents()
         .AddInteractiveServerComponents();
+
+    builder.Services.AddMudServices();
 
     builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseSqlServer(connectionString));

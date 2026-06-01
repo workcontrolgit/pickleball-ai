@@ -7,14 +7,15 @@
 
   <!-- Copy YOLO model to output if present (file is gitignored; download separately) -->
   <ItemGroup>
-    <None Include="..\PickleIQ.Infrastructure\Models\*.onnx"
-          CopyToOutputDirectory="PreserveNewest"
-          Link="Models\%(Filename)%(Extension)" />
+    <None Include="..\PickleIQ.Infrastructure\Models\*.onnx" CopyToOutputDirectory="PreserveNewest" Link="Models\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Hangfire.AspNetCore" Version="1.8.23" />
     <PackageReference Include="Hangfire.SqlServer" Version="1.8.23" />
+    <PackageReference Include="Markdig" Version="1.2.0" />
+    <PackageReference Include="MudBlazor" Version="9.5.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
