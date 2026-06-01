@@ -62,7 +62,15 @@ try
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")!;
 
     builder.Services.AddRazorComponents()
-        .AddInteractiveServerComponents();
+        .AddInteractiveServerComponents(options =>
+            options.MaxBufferedUnacknowledgedRenderBatches = 20);
+
+    builder.Services.AddServerSideBlazor(options =>
+        options.MaxBufferedUnacknowledgedRenderBatches = 20);
+
+    const long fiveGb = 5L * 1024 * 1024 * 1024;
+    builder.Services.AddSignalR(options =>
+        options.MaximumReceiveMessageSize = fiveGb);
 
     builder.Services.AddMudServices();
 
