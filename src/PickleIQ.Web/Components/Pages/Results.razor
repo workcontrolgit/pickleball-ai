@@ -8,6 +8,7 @@
 @inject AppDbContext Db
 @inject NavigationManager Navigation
 @inject IBackgroundJobClient JobClient
+@inject IDialogService DialogService
 @implements IAsyncDisposable
 @rendermode InteractiveServer
 
@@ -135,7 +136,7 @@ else
                 Download Highlight Reel
             </MudButton>
         }
-        <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="RetryAsync" Disabled="_retrying">
+        <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="ConfirmReprocessAsync" Disabled="_retrying">
             @(_retrying ? "Reprocessing…" : "Reprocess")
         </MudButton>
     </MudStack>
@@ -245,6 +246,16 @@ else
         _pollTimer = null;
         if (t is not null)
             await t.DisposeAsync();
+    }
+
+    private async Task ConfirmReprocessAsync()
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Reprocess Video",
+            "This will delete the existing analysis results and reprocess the video from scratch.",
+            yesText: "Reprocess", cancelText: "Cancel");
+        if (confirmed != true) return;
+        await RetryAsync();
     }
 
     private async Task RetryAsync()

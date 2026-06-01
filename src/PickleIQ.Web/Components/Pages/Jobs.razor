@@ -6,6 +6,7 @@
 @using PickleIQ.Infrastructure.Jobs
 @inject AppDbContext Db
 @inject IBackgroundJobClient JobClient
+@inject IDialogService DialogService
 @rendermode InteractiveServer
 
 <PageTitle>My Videos — PickleIQ</PageTitle>
@@ -33,7 +34,7 @@ else if (_jobs.Count == 0)
 }
 else
 {
-    <!-- Desktop table -->
+    @* Desktop table *@
     <MudHidden Breakpoint="Breakpoint.SmAndDown">
         <MudTable Items="_jobs" Hover="true" Elevation="2">
             <HeaderContent>
@@ -63,7 +64,7 @@ else
         </MudTable>
     </MudHidden>
 
-    <!-- Mobile cards -->
+    @* Mobile cards *@
     <MudHidden Breakpoint="Breakpoint.MdAndUp">
         <MudStack Spacing="3">
             @foreach (var job in _jobs)
@@ -79,7 +80,7 @@ else
                         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
                             @job.CreatedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
                         </MudText>
-                        <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                        <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
                             @ActionButtons(job)
                         </MudStack>
                     </MudCardContent>
@@ -107,33 +108,84 @@ else
     {
         if (job.Status == VideoJobStatus.ReportComplete)
         {
-            <MudButton Href="@($"/results/{job.Id}")" Variant="Variant.Outlined" Color="Color.Success" Size="Size.Small" Class="mr-1">View Results</MudButton>
-            @if (!string.IsNullOrEmpty(job.HighlightFilePath))
-            {
-                <MudButton Href="@($"/download/{job.Id}/highlights")" Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" Class="mr-1">Download</MudButton>
-            }
-            <MudButton OnClick="@(() => RetryAsync(job.Id))" Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small" Class="mr-1"
-                       Disabled="_retrying.Contains(job.Id)">
-                @(_retrying.Contains(job.Id) ? "Retrying…" : "Reprocess")
+            <MudButton Href="@($"/results/{job.Id}")" Variant="Variant.Filled" Color="Color.Success"
+                       Size="Size.Small" StartIcon="@Icons.Material.Filled.Assessment">
+                View Results
             </MudButton>
-            <MudButton OnClick="@(() => DeleteAsync(job.Id))" Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-                       Disabled="_deleting.Contains(job.Id)">Delete</MudButton>
+            <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small"
+                     AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                @if (!string.IsNullOrEmpty(job.HighlightFilePath))
+                {
+                    <MudMenuItem Icon="@Icons.Material.Filled.Download"
+                                 Href="@($"/download/{job.Id}/highlights")">
+                        Download Highlights
+                    </MudMenuItem>
+                }
+                <MudMenuItem Icon="@Icons.Material.Filled.Refresh"
+                             Disabled="_retrying.Contains(job.Id)"
+                             OnClick="@(async () => await ConfirmReprocessAsync(job.Id))">
+                    @(_retrying.Contains(job.Id) ? "Reprocessing…" : "Reprocess")
+                </MudMenuItem>
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.Delete"
+                             Style="color: var(--mud-palette-error);"
+                             Disabled="_deleting.Contains(job.Id)"
+                             OnClick="@(async () => await ConfirmDeleteAsync(job))">
+                    Delete
+                </MudMenuItem>
+            </MudMenu>
         }
         else if (job.Status == VideoJobStatus.Failed)
         {
-            <MudButton OnClick="@(() => RetryAsync(job.Id))" Variant="Variant.Filled" Color="Color.Warning" Size="Size.Small" Class="mr-1"
+            <MudButton OnClick="@(async () => await RetryAsync(job.Id))" Variant="Variant.Filled"
+                       Color="Color.Warning" Size="Size.Small" StartIcon="@Icons.Material.Filled.Refresh"
                        Disabled="_retrying.Contains(job.Id)">
                 @(_retrying.Contains(job.Id) ? "Retrying…" : "Retry")
             </MudButton>
-            <MudButton Href="@($"/results/{job.Id}")" Variant="Variant.Outlined" Color="Color.Inherit" Size="Size.Small" Class="mr-1">Details</MudButton>
-            <MudButton OnClick="@(() => DeleteAsync(job.Id))" Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
-                       Disabled="_deleting.Contains(job.Id)">Delete</MudButton>
+            <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small"
+                     AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                <MudMenuItem Icon="@Icons.Material.Filled.Info"
+                             Href="@($"/results/{job.Id}")">
+                    Details
+                </MudMenuItem>
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.Delete"
+                             Style="color: var(--mud-palette-error);"
+                             Disabled="_deleting.Contains(job.Id)"
+                             OnClick="@(async () => await ConfirmDeleteAsync(job))">
+                    Delete
+                </MudMenuItem>
+            </MudMenu>
         }
         else
         {
-            <MudButton Href="@($"/results/{job.Id}")" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small">View Progress</MudButton>
+            <MudButton Href="@($"/results/{job.Id}")" Variant="Variant.Outlined"
+                       Color="Color.Primary" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.HourglassEmpty">
+                View Progress
+            </MudButton>
         }
     };
+
+    private async Task ConfirmDeleteAsync(VideoJob job)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Delete Video",
+            $"Delete \"{job.FileName}\"? This will permanently remove the video, highlights, and all analysis data.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true) return;
+        await DeleteAsync(job.Id);
+    }
+
+    private async Task ConfirmReprocessAsync(Guid jobId)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Reprocess Video",
+            "This will delete the existing analysis results and reprocess the video from scratch.",
+            yesText: "Reprocess", cancelText: "Cancel");
+        if (confirmed != true) return;
+        await RetryAsync(jobId);
+    }
 
     private async Task RetryAsync(Guid jobId)
     {
