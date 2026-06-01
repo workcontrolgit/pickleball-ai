@@ -1,4 +1,24 @@
 /* MudBlazor custom overrides */
+
+/* Upload drop zone */
+.upload-drop-zone {
+    border: 2px dashed #bdbdbd;
+    border-radius: 8px;
+    padding: 3rem 2rem;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    text-align: center;
+    user-select: none;
+}
+.upload-drop-zone:hover {
+    border-color: #2E7D32;
+    background: #f1f8f1;
+}
+.upload-drop-zone.dragging {
+    border-color: #2E7D32;
+    border-style: solid;
+    background: #e8f5e9;
+}
 .coaching-report h2 { margin-top: 1.5rem; margin-bottom: .5rem; font-size: 1.25rem; font-weight: 600; }
 .coaching-report ul { padding-left: 1.5rem; }
 .coaching-report li { margin-bottom: .25rem; }
