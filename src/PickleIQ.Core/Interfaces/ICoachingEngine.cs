@@ -4,7 +4,8 @@ public record MatchSummary(
     int RallyCount,
     double AverageRallySeconds,
     double LongestRallySeconds,
-    double TotalMatchSeconds);
+    double TotalMatchSeconds,
+    IReadOnlyList<byte[]> CoachingFrames);
 
 public interface ICoachingEngine
 {
