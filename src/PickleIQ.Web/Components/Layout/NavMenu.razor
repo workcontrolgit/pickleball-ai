@@ -1,23 +1,32 @@
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">PickleIQ</a>
-    </div>
-</div>
+@inject NavigationManager Navigation
+@implements IDisposable
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+<MudAppBar Elevation="1" Color="Color.Primary">
+    <MudText Typo="Typo.h6" Class="ml-2" Style="font-weight:700;letter-spacing:.5px;">🥒 PickleIQ</MudText>
+    <MudSpacer />
+    <MudHidden Breakpoint="Breakpoint.SmAndDown">
+        <MudButton Href="/upload" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.CloudUpload">Upload Video</MudButton>
+        <MudButton Href="/jobs" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.VideoLibrary">My Videos</MudButton>
+    </MudHidden>
+</MudAppBar>
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="upload">
-                <span class="bi bi-cloud-upload-fill-nav-menu" aria-hidden="true"></span> Upload Video
-            </NavLink>
-        </div>
+<MudHidden Breakpoint="Breakpoint.MdAndUp">
+    <MudAppBar Bottom="true" Elevation="1" Color="Color.Primary" Fixed="true">
+        <MudButton Href="/upload" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.CloudUpload" FullWidth="true">Upload</MudButton>
+        <MudButton Href="/jobs" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.VideoLibrary" FullWidth="true">My Videos</MudButton>
+    </MudAppBar>
+</MudHidden>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="jobs">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> My Videos
-            </NavLink>
-        </div>
-    </nav>
-</div>
+@code {
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        // intentionally empty — state tracking not needed without MudBottomNavigation
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}
