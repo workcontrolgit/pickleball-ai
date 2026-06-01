@@ -40,6 +40,8 @@ else
                 <MudTh>File</MudTh>
                 <MudTh>Status</MudTh>
                 <MudTh>Uploaded</MudTh>
+                <MudTh>Video Size</MudTh>
+                <MudTh>Highlight Size</MudTh>
                 <MudTh Style="text-align:right">Actions</MudTh>
             </HeaderContent>
             <RowTemplate>
@@ -55,6 +57,12 @@ else
                     <MudText Typo="Typo.body2" Color="Color.Secondary">
                         @context.CreatedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
                     </MudText>
+                </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@GetFileSize(context.FilePath)</MudText>
+                </MudTd>
+                <MudTd>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@GetFileSize(context.HighlightFilePath)</MudText>
                 </MudTd>
                 <MudTd Style="text-align:right">
                     @ActionButtons(context)
@@ -76,9 +84,20 @@ else
                                 @StatusLabel(job.Status)
                             </MudChip>
                         </MudStack>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
                             @job.CreatedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
                         </MudText>
+                        <MudStack Row="true" Spacing="3" Class="mb-3">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Video: @GetFileSize(job.FilePath)
+                            </MudText>
+                            @if (!string.IsNullOrEmpty(job.HighlightFilePath))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    Highlights: @GetFileSize(job.HighlightFilePath)
+                                </MudText>
+                            }
+                        </MudStack>
                         <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
                             @ActionButtons(job)
                         </MudStack>
@@ -239,6 +258,23 @@ else
         if (string.IsNullOrEmpty(path)) return;
         var normalized = path.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
         if (File.Exists(normalized)) File.Delete(normalized);
+    }
+
+    private static string GetFileSize(string? path)
+    {
+        if (string.IsNullOrEmpty(path)) return "—";
+        try
+        {
+            var info = new FileInfo(path);
+            if (!info.Exists) return "—";
+            return info.Length switch
+            {
+                < 1024 * 1024 => $"{info.Length / 1024} KB",
+                < 1024L * 1024 * 1024 => $"{info.Length / (1024.0 * 1024):F1} MB",
+                _ => $"{info.Length / (1024.0 * 1024 * 1024):F2} GB"
+            };
+        }
+        catch { return "—"; }
     }
 
     private static string StatusLabel(VideoJobStatus status) => status switch
