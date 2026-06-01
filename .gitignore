@@ -22,6 +22,16 @@ appsettings.Development.json
 
 # YOLO models (large binary files — download separately)
 src/PickleIQ.Infrastructure/Models/*.onnx
+*.pt
+
+# Logs
+src/PickleIQ.Web/logs/
+
+# Build artifacts
+build.log
+
+# Playwright MCP session data
+.playwright-mcp/
 
 # OS
 .DS_Store
