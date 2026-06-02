@@ -47,7 +47,7 @@ public class CoachingFrameSampler(
                                 opts => opts.Seek(TimeSpan.FromSeconds(ts)))
                             .OutputToFile(framePath, true, opts => opts
                                 .WithFrameOutputCount(1)
-                                .WithVideoFilters(f => f.Scale(1280, -2))
+                                .WithVideoFilters(f => f.Scale(640, -2))
                                 .ForceFormat("image2"))
                             .ProcessAsynchronously(true, ffOptions);
 

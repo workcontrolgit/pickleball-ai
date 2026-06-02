@@ -54,8 +54,12 @@ public class OllamaVisionCoachingEngine(
                 var content = chunk?.Message?.Content;
                 if (!string.IsNullOrEmpty(content))
                 {
-                    sb.Append(content);
-                    onChunk?.Invoke(content);
+                    var cleaned = StripSpecialTokens(content);
+                    if (!string.IsNullOrEmpty(cleaned))
+                    {
+                        sb.Append(cleaned);
+                        onChunk?.Invoke(cleaned);
+                    }
                 }
             }
 
@@ -100,6 +104,16 @@ public class OllamaVisionCoachingEngine(
 
                 Use bullet points under each section. Keep tone encouraging and actionable. Be specific to pickleball.
                 """;
+    }
+
+    private static readonly string[] _qwenSpecialTokens =
+        ["<|im_start|>", "<|im_end|>", "<|endoftext|>", "<|object_ref_start|>", "<|object_ref_end|>"];
+
+    private static string StripSpecialTokens(string text)
+    {
+        foreach (var token in _qwenSpecialTokens)
+            text = text.Replace(token, string.Empty);
+        return text;
     }
 
     private static string GenerateFallbackMarkdown(MatchSummary summary) =>
