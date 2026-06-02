@@ -381,7 +381,9 @@ else
     public async ValueTask DisposeAsync()
     {
         _statusCts.Cancel();
+        _statusCts.Dispose();
         _streamCts.Cancel();
+        _streamCts.Dispose();
         JobStatusService.Unsubscribe(JobId);
         if (_fallbackTimer is not null)
             await _fallbackTimer.DisposeAsync();
