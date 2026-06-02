@@ -13,6 +13,7 @@ public class VideoProcessingJob(
     ICoachingFrameSampler frameSampler,
     IHighlightGenerationService highlightGenerationService,
     ICoachingEngine coachingEngine,
+    ICoachingStreamService coachingStreamService,
     ILogger<VideoProcessingJob> logger) : IVideoProcessingJob
 {
     public async Task ProcessAsync(Guid jobId)
@@ -76,14 +77,25 @@ public class VideoProcessingJob(
                 LongestRallySeconds: durations.Count > 0 ? durations.Max() : 0,
                 TotalMatchSeconds: totalMatchSeconds);
 
-            var report = await coachingEngine.GenerateReportHtmlAsync(summary, coachingFrames);
-
-            db.CoachingReports.Add(new CoachingReport
+            coachingStreamService.CreateStream(jobId);
+            try
             {
-                Id = Guid.NewGuid(),
-                VideoJobId = jobId,
-                HtmlContent = report
-            });
+                var report = await coachingEngine.GenerateReportHtmlAsync(
+                    summary,
+                    coachingFrames,
+                    onChunk: chunk => coachingStreamService.WriteChunk(jobId, chunk));
+
+                db.CoachingReports.Add(new CoachingReport
+                {
+                    Id = Guid.NewGuid(),
+                    VideoJobId = jobId,
+                    HtmlContent = report
+                });
+            }
+            finally
+            {
+                coachingStreamService.CompleteStream(jobId);
+            }
 
             job.Status = VideoJobStatus.ReportComplete;
             job.CompletedAt = DateTime.UtcNow;
