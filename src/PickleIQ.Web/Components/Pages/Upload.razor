@@ -28,7 +28,7 @@
                     @(_isDragging ? "Drop to upload" : "Drag & drop your video here")
                 </MudText>
                 <MudText Typo="Typo.body2" Color="Color.Secondary">or click to browse</MudText>
-                <MudText Typo="Typo.caption" Color="Color.Secondary">MP4 or MOV · up to 5 GB</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">MP4 or MOV · up to 12 GB</MudText>
             </MudStack>
         </div>
 
@@ -42,7 +42,7 @@
             @if (_selectedFile.Size > MaxFileSizeBytes)
             {
                 <MudAlert Severity="Severity.Error" Class="mb-3">
-                    File exceeds the 5 GB limit. Please select a smaller file.
+                    File exceeds the 12 GB limit. Please select a smaller file.
                 </MudAlert>
             }
             else
@@ -70,7 +70,7 @@
 </MudPaper>
 
 @code {
-    private const long MaxFileSizeBytes = 5L * 1024 * 1024 * 1024;
+    private const long MaxFileSizeBytes = 12L * 1024 * 1024 * 1024;
 
     private IBrowserFile? _selectedFile;
     private bool _uploading;
