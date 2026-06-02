@@ -104,6 +104,8 @@ try
     app.UseHttpsRedirection();
     app.UseAntiforgery();
 
+    app.MapHangfireDashboard("/hangfire");
+
     app.MapStaticAssets();
     app.MapRazorComponents<App>()
         .AddInteractiveServerRenderMode();
