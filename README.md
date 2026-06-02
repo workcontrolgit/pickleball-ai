@@ -6,7 +6,7 @@ AI-powered pickleball video analysis. Upload a match video and get back a highli
 
 1. **Rally detection** — YOLO person detection identifies active rally segments across the match
 2. **Highlight reel** — top segments concatenated into a ~60-second MP4
-3. **Coaching report** — AI-generated HTML report with strengths, improvement areas, and drill recommendations (powered by Ollama + nemotron-mini running locally)
+3. **Coaching report** — AI-generated markdown report with strengths, improvement areas, and drill recommendations (powered by Ollama + qwen2.5vl running locally with GPU)
 
 ## Tech Stack
 
@@ -18,17 +18,18 @@ AI-powered pickleball video analysis. Upload a match video and get back a highli
 | Database | EF Core + SQL Server Express (LocalDB) |
 | Video processing | FFMpegCore (wraps FFmpeg) |
 | Person detection | YoloDotNet 4.2 + yolo11n ONNX model |
-| AI coaching | OllamaSharp → Ollama (nemotron-mini) |
+| AI coaching | OllamaSharp → Ollama (qwen2.5vl:7b vision model) |
 
 ## Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - [SQL Server Express LocalDB](https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/sql-server-express-localdb) (installed with Visual Studio or standalone)
 - [FFmpeg](https://ffmpeg.org/download.html) — must be on `PATH` or configured via `FFmpeg:BinaryFolder` (see below)
-- [Ollama](https://ollama.com) with `nemotron-mini` pulled (optional — falls back to statistical summary if unavailable)
+- [Ollama](https://ollama.com) with `qwen2.5vl:7b` pulled — requires an NVIDIA GPU with 14+ GB VRAM (falls back to a statistical summary if unavailable)
+- NVIDIA GPU with 14+ GB VRAM (tested on 16 GB) for vision inference
 
 ```bash
-ollama pull nemotron-mini
+ollama pull qwen2.5vl:7b
 ```
 
 ## YOLO Model
@@ -100,12 +101,7 @@ Open `https://localhost:5001/upload` to upload a match video. Results appear at 
 
 > **Tip:** Watch the terminal for log output — it shows each pipeline stage (rally detection → highlight generation → coaching report) as it runs.
 
-**Terminal 2 — API (optional, Hangfire dashboard only)**
-```bash
-dotnet run --project src/PickleIQ.Api
-```
-
-Only needed if you want to inspect the job queue at `http://localhost:5000/hangfire`. Not required for normal use.
+The Hangfire dashboard is served by the web project at `/hangfire`. No separate API process is needed.
 
 ## Project Structure
 
@@ -129,14 +125,30 @@ docs/
 | `ConnectionStrings:DefaultConnection` | LocalDB `PickleIQ` | SQL Server connection string |
 | `VideoStorage:BasePath` | `C:/temp/pickleiq/videos` | Where uploaded videos are saved |
 | `VideoStorage:HighlightsPath` | `C:/temp/pickleiq/highlights` | Where highlight reels are written |
-| `Ollama:Endpoint` | `http://localhost:11434` | Ollama server URL |
-| `Ollama:Model` | `nemotron-mini` | Model to use for coaching reports |
+| `Coaching:Endpoint` | `http://localhost:11434` | Ollama server URL |
+| `Coaching:Model` | `qwen2.5vl:7b` | Vision model for coaching reports |
+| `Coaching:ContextWindow` | `12288` | Token context window (see VRAM table below) |
 | `YoloModel:Path` | `Models/yolo11n.onnx` | Path to ONNX model file (relative to app base) |
 | `FFmpeg:BinaryFolder` | _(system PATH)_ | Explicit path to FFmpeg `bin` folder — set if `ffmpeg` is not on PATH |
 
+## Vision Model — Context Window & VRAM
+
+Coaching frames are extracted at 640px wide (3 frames × top 2 rallies = 6 frames per job). Tested on an NVIDIA GPU with 16 GB VRAM running `qwen2.5vl:7b` (Q4_K_M):
+
+| Context window | VRAM used | Tokens generated | Status |
+|---------------|-----------|-----------------|--------|
+| 4,096 | ~14.5 GB | 2 (blank report) | Too small — images exhaust context |
+| 8,192 | ~12.5 GB | ~415 | Works |
+| **12,288** | **13.17 GB** | **~544** | **Recommended — most output, safe margin** |
+| 16,384 | — | — | GGML assertion error (model architecture limit) |
+
+`Coaching:ContextWindow` is set to `12288` by default. Lower it if you have less than 16 GB VRAM.
+
+> The prompt tokens for 6 frames at 640px is ~1,850 tokens. At 12,288 context this leaves ~10,400 tokens for the coaching response.
+
 ## Hangfire Dashboard
 
-Available at `http://localhost:5000/hangfire` when the API is running. Shows job queue, retries, and history.
+Available at `/hangfire`. Shows job queue, retries, and history.
 
 ## License
 

@@ -88,8 +88,11 @@ try
     builder.Services.AddScoped<IVideoStorageService, VideoStorageService>();
     builder.Services.AddScoped<IRallyDetectionService, RallyDetectionService>();
     builder.Services.AddScoped<IHighlightGenerationService, HighlightGenerationService>();
-    builder.Services.AddScoped<ICoachingEngine, OllamaCoachingEngine>();
+    builder.Services.AddScoped<ICoachingFrameSampler, CoachingFrameSampler>();
+    builder.Services.AddScoped<ICoachingEngine, OllamaVisionCoachingEngine>();
     builder.Services.AddScoped<VideoProcessingJob>();
+    builder.Services.AddSingleton<ICoachingStreamService, CoachingStreamService>();
+    builder.Services.AddSingleton<IJobStatusService, JobStatusService>();
 
     var app = builder.Build();
 
@@ -102,6 +105,8 @@ try
     app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
     app.UseHttpsRedirection();
     app.UseAntiforgery();
+
+    app.MapHangfireDashboard("/hangfire");
 
     app.MapStaticAssets();
     app.MapRazorComponents<App>()

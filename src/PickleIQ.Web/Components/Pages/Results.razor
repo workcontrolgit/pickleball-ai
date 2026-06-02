@@ -4,11 +4,15 @@
 @using PickleIQ.Infrastructure.Data
 @using Hangfire
 @using PickleIQ.Infrastructure.Jobs
+@using PickleIQ.Core.Interfaces
 @using Markdig
+@using System.Threading.Channels
 @inject AppDbContext Db
 @inject NavigationManager Navigation
 @inject IBackgroundJobClient JobClient
 @inject IDialogService DialogService
+@inject ICoachingStreamService CoachingStreamService
+@inject IJobStatusService JobStatusService
 @implements IAsyncDisposable
 
 <PageTitle>Results — PickleIQ</PageTitle>
@@ -39,10 +43,20 @@ else if (_job.Status == VideoJobStatus.Failed)
 else if (_job.Status != VideoJobStatus.ReportComplete)
 {
     <MudStack AlignItems="AlignItems.Center" Class="mt-6" Spacing="4">
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
-        <MudText Color="Color.Secondary">@StatusMessage(_job.Status)</MudText>
-        <MudProgressLinear Color="Color.Primary" Striped="true" Rounded="true"
-                           Value="@ProgressPercent(_job.Status)" Class="my-2" Style="width:100%;max-width:400px;" />
+        @if (string.IsNullOrEmpty(_streamingReport))
+        {
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+            <MudText Color="Color.Secondary">@StatusMessage(_job.Status)</MudText>
+            <MudProgressLinear Color="Color.Primary" Striped="true" Rounded="true"
+                               Value="@ProgressPercent(_job.Status)" Class="my-2" Style="width:100%;max-width:400px;" />
+        }
+        else
+        {
+            <MudText Color="Color.Secondary" Class="align-self-start">Generating AI coaching report...</MudText>
+            <MudPaper Elevation="1" Class="pa-4 mb-4" Style="width:100%">
+                <div class="coaching-report">@((MarkupString)Markdown.ToHtml(_streamingReport, _markdigPipeline))</div>
+            </MudPaper>
+        }
         <MudText Typo="Typo.body2" Color="Color.Secondary">Job ID: @JobId</MudText>
     </MudStack>
 }
@@ -150,8 +164,11 @@ else
     private VideoJob? _job;
     private List<RallySegment> _segments = [];
     private CoachingReport? _report;
-    private System.Threading.Timer? _pollTimer;
     private bool _retrying;
+    private string _streamingReport = string.Empty;
+    private CancellationTokenSource _streamCts = new();
+    private CancellationTokenSource _statusCts = new();
+    private System.Threading.Timer? _fallbackTimer;
 
     private long? _sourceSize;
     private DateTime? _sourceDate;
@@ -166,13 +183,67 @@ else
 
         if (_job?.Status != VideoJobStatus.ReportComplete && _job?.Status != VideoJobStatus.Failed)
         {
-            _pollTimer = new System.Threading.Timer(async _ =>
+            JobStatusService.Subscribe(JobId);
+
+            _fallbackTimer = new System.Threading.Timer(async _ =>
             {
                 await RefreshAsync();
                 await InvokeAsync(StateHasChanged);
-                if (_job?.Status == VideoJobStatus.ReportComplete || _job?.Status == VideoJobStatus.Failed)
-                    await DisposeTimerAsync();
-            }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+            }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+
+            _ = Task.Run(() => ConsumeStatusAsync(_statusCts.Token));
+            _ = Task.Run(() => ConsumeStreamAsync(_streamCts.Token));
+        }
+    }
+
+    private async Task ConsumeStatusAsync(CancellationToken ct)
+    {
+        try
+        {
+            var reader = JobStatusService.TryGetReader(JobId);
+            if (reader is null) return;
+
+            await foreach (var status in reader.ReadAllAsync(ct).ConfigureAwait(false))
+            {
+                await RefreshAsync();
+                await InvokeAsync(StateHasChanged);
+
+                if (status == VideoJobStatus.ReportComplete || status == VideoJobStatus.Failed)
+                {
+                    JobStatusService.Unsubscribe(JobId);
+                    await DisposeFallbackTimerAsync();
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected on dispose or retry
+        }
+    }
+
+    private async Task ConsumeStreamAsync(CancellationToken ct)
+    {
+        try
+        {
+            ChannelReader<string>? reader = null;
+            for (var i = 0; i < 120 && !ct.IsCancellationRequested; i++)
+            {
+                reader = CoachingStreamService.TryGetReader(JobId);
+                if (reader is not null) break;
+                await Task.Delay(500, ct).ConfigureAwait(false);
+            }
+
+            if (reader is null) return;
+
+            await foreach (var chunk in reader.ReadAllAsync(ct).ConfigureAwait(false))
+            {
+                await InvokeAsync(() => { _streamingReport += chunk; StateHasChanged(); });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected on dispose or retry
         }
     }
 
@@ -239,10 +310,10 @@ else
         _ => 10
     };
 
-    private async Task DisposeTimerAsync()
+    private async Task DisposeFallbackTimerAsync()
     {
-        var t = _pollTimer;
-        _pollTimer = null;
+        var t = _fallbackTimer;
+        _fallbackTimer = null;
         if (t is not null)
             await t.DisposeAsync();
     }
@@ -259,9 +330,20 @@ else
 
     private async Task RetryAsync()
     {
-        await DisposeTimerAsync();
+        JobStatusService.Unsubscribe(JobId);
+        await DisposeFallbackTimerAsync();
+
+        _streamingReport = string.Empty;
+        _streamCts.Cancel();
+        _streamCts.Dispose();
+        _streamCts = new CancellationTokenSource();
+        _statusCts.Cancel();
+        _statusCts.Dispose();
+        _statusCts = new CancellationTokenSource();
+
         _retrying = true;
         StateHasChanged();
+
         var job = await Db.VideoJobs.FindAsync(JobId);
         if (job is not null && (job.Status == VideoJobStatus.Failed || job.Status == VideoJobStatus.ReportComplete))
         {
@@ -282,20 +364,28 @@ else
                 // Enqueue failed after commit — job is Queued but no worker dispatched. User can retry again.
             }
         }
+
         _retrying = false;
         await RefreshAsync();
-        _pollTimer = new System.Threading.Timer(async _ =>
+
+        JobStatusService.Subscribe(JobId);
+        _fallbackTimer = new System.Threading.Timer(async _ =>
         {
             await RefreshAsync();
             await InvokeAsync(StateHasChanged);
-            if (_job?.Status == VideoJobStatus.ReportComplete || _job?.Status == VideoJobStatus.Failed)
-                await DisposeTimerAsync();
-        }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+        _ = Task.Run(() => ConsumeStatusAsync(_statusCts.Token));
+        _ = Task.Run(() => ConsumeStreamAsync(_streamCts.Token));
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_pollTimer is not null)
-            await _pollTimer.DisposeAsync();
+        _statusCts.Cancel();
+        _statusCts.Dispose();
+        _streamCts.Cancel();
+        _streamCts.Dispose();
+        JobStatusService.Unsubscribe(JobId);
+        if (_fallbackTimer is not null)
+            await _fallbackTimer.DisposeAsync();
     }
 }

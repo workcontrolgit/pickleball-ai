@@ -1,3 +1,4 @@
+using FFMpegCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using PickleIQ.Core.Entities;
@@ -9,8 +10,11 @@ namespace PickleIQ.Infrastructure.Jobs;
 public class VideoProcessingJob(
     AppDbContext db,
     IRallyDetectionService rallyDetectionService,
+    ICoachingFrameSampler frameSampler,
     IHighlightGenerationService highlightGenerationService,
     ICoachingEngine coachingEngine,
+    ICoachingStreamService coachingStreamService,
+    IJobStatusService jobStatusService,
     ILogger<VideoProcessingJob> logger) : IVideoProcessingJob
 {
     public async Task ProcessAsync(Guid jobId)
@@ -29,6 +33,7 @@ public class VideoProcessingJob(
             // Step 1: Rally Detection
             job.Status = VideoJobStatus.RallyDetectionInProgress;
             await db.SaveChangesAsync();
+            jobStatusService.PushStatus(jobId, job.Status);
 
             var segments = await rallyDetectionService.DetectRalliesAsync(job.FilePath);
 
@@ -45,24 +50,29 @@ public class VideoProcessingJob(
 
             job.Status = VideoJobStatus.RallyDetectionComplete;
             await db.SaveChangesAsync();
+            jobStatusService.PushStatus(jobId, job.Status);
 
             logger.LogInformation("Job {JobId}: {Count} rally segments detected", jobId, segments.Count);
 
-            // Step 2: Highlight Generation
+            // Steps 2a/2b/2c — run in parallel
             job.Status = VideoJobStatus.HighlightInProgress;
             await db.SaveChangesAsync();
+            jobStatusService.PushStatus(jobId, job.Status);
 
-            var highlightPath = await highlightGenerationService.GenerateAsync(jobId, job.FilePath);
+            var (highlightPath, coachingFrames, totalMatchSeconds) = await RunParallelStepsAsync(job, segments);
+
             if (!string.IsNullOrEmpty(highlightPath))
                 job.HighlightFilePath = highlightPath;
             job.Status = VideoJobStatus.HighlightComplete;
             await db.SaveChangesAsync();
+            jobStatusService.PushStatus(jobId, job.Status);
 
             logger.LogInformation("Job {JobId}: highlight reel at {Path}", jobId, highlightPath);
 
-            // Step 3: Coaching Report
+            // Step 4: Coaching Report
             job.Status = VideoJobStatus.ReportInProgress;
             await db.SaveChangesAsync();
+            jobStatusService.PushStatus(jobId, job.Status);
 
             var savedSegments = await db.RallySegments.Where(r => r.VideoJobId == jobId).ToListAsync();
             var durations = savedSegments.Select(s => s.EndSeconds - s.StartSeconds).ToList();
@@ -71,21 +81,32 @@ public class VideoProcessingJob(
                 RallyCount: savedSegments.Count,
                 AverageRallySeconds: durations.Count > 0 ? durations.Average() : 0,
                 LongestRallySeconds: durations.Count > 0 ? durations.Max() : 0,
-                TotalMatchSeconds: 0 // duration from video metadata — set to 0 for MVP
-            );
+                TotalMatchSeconds: totalMatchSeconds);
 
-            var htmlReport = await coachingEngine.GenerateReportHtmlAsync(summary);
-
-            db.CoachingReports.Add(new CoachingReport
+            coachingStreamService.CreateStream(jobId);
+            try
             {
-                Id = Guid.NewGuid(),
-                VideoJobId = jobId,
-                HtmlContent = htmlReport
-            });
+                var report = await coachingEngine.GenerateReportHtmlAsync(
+                    summary,
+                    coachingFrames,
+                    onChunk: chunk => coachingStreamService.WriteChunk(jobId, chunk));
+
+                db.CoachingReports.Add(new CoachingReport
+                {
+                    Id = Guid.NewGuid(),
+                    VideoJobId = jobId,
+                    HtmlContent = report
+                });
+            }
+            finally
+            {
+                coachingStreamService.CompleteStream(jobId);
+            }
 
             job.Status = VideoJobStatus.ReportComplete;
             job.CompletedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
+            jobStatusService.PushStatus(jobId, job.Status);
 
             logger.LogInformation("Job {JobId} completed successfully", jobId);
         }
@@ -95,6 +116,21 @@ public class VideoProcessingJob(
             job.Status = VideoJobStatus.Failed;
             job.ErrorMessage = ex.Message;
             await db.SaveChangesAsync();
+            jobStatusService.PushStatus(jobId, job.Status);
         }
+    }
+
+    private async Task<(string? HighlightPath, IReadOnlyList<byte[]> CoachingFrames, double TotalMatchSeconds)>
+        RunParallelStepsAsync(VideoJob job, IList<(double StartSeconds, double EndSeconds)> segments)
+    {
+        var highlightTask = highlightGenerationService.GenerateAsync(job.Id, job.FilePath);
+        var framesTask = frameSampler.SampleAsync(
+            job.FilePath,
+            (IReadOnlyList<(double StartSeconds, double EndSeconds)>)segments);
+        var probeTask = FFProbe.AnalyseAsync(job.FilePath);
+
+        await Task.WhenAll(highlightTask, framesTask, probeTask);
+
+        return (await highlightTask, await framesTask, (await probeTask).Duration.TotalSeconds);
     }
 }
