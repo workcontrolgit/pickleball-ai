@@ -278,6 +278,7 @@ else
         await DisposeTimerAsync();
         _streamingReport = string.Empty;
         _streamCts.Cancel();
+        _streamCts.Dispose();
         _streamCts = new CancellationTokenSource();
         _retrying = true;
         StateHasChanged();
@@ -315,21 +316,27 @@ else
 
     private async Task ConsumeStreamAsync(CancellationToken ct)
     {
-        // Poll until a stream is available (job may not have started report gen yet)
-        ChannelReader<string>? reader = null;
-        for (var i = 0; i < 120 && !ct.IsCancellationRequested; i++)
+        try
         {
-            reader = CoachingStreamService.TryGetReader(JobId);
-            if (reader is not null) break;
-            await Task.Delay(500, ct).ConfigureAwait(false);
+            // Poll until a stream is available (job may not have started report gen yet)
+            ChannelReader<string>? reader = null;
+            for (var i = 0; i < 120 && !ct.IsCancellationRequested; i++)
+            {
+                reader = CoachingStreamService.TryGetReader(JobId);
+                if (reader is not null) break;
+                await Task.Delay(500, ct).ConfigureAwait(false);
+            }
+
+            if (reader is null) return;
+
+            await foreach (var chunk in reader.ReadAllAsync(ct).ConfigureAwait(false))
+            {
+                await InvokeAsync(() => { _streamingReport += chunk; StateHasChanged(); });
+            }
         }
-
-        if (reader is null) return;
-
-        await foreach (var chunk in reader.ReadAllAsync(ct).ConfigureAwait(false))
+        catch (OperationCanceledException)
         {
-            _streamingReport += chunk;
-            await InvokeAsync(StateHasChanged);
+            // Expected when component is disposed or retry is triggered
         }
     }
 
