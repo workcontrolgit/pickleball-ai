@@ -91,6 +91,7 @@ try
     builder.Services.AddScoped<ICoachingFrameSampler, CoachingFrameSampler>();
     builder.Services.AddScoped<ICoachingEngine, OllamaVisionCoachingEngine>();
     builder.Services.AddScoped<VideoProcessingJob>();
+    builder.Services.AddSingleton<ICoachingStreamService, CoachingStreamService>();
 
     var app = builder.Build();
 

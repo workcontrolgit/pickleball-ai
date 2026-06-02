@@ -4,11 +4,14 @@
 @using PickleIQ.Infrastructure.Data
 @using Hangfire
 @using PickleIQ.Infrastructure.Jobs
+@using PickleIQ.Core.Interfaces
 @using Markdig
+@using System.Threading.Channels
 @inject AppDbContext Db
 @inject NavigationManager Navigation
 @inject IBackgroundJobClient JobClient
 @inject IDialogService DialogService
+@inject ICoachingStreamService CoachingStreamService
 @implements IAsyncDisposable
 
 <PageTitle>Results — PickleIQ</PageTitle>
@@ -39,10 +42,20 @@ else if (_job.Status == VideoJobStatus.Failed)
 else if (_job.Status != VideoJobStatus.ReportComplete)
 {
     <MudStack AlignItems="AlignItems.Center" Class="mt-6" Spacing="4">
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
-        <MudText Color="Color.Secondary">@StatusMessage(_job.Status)</MudText>
-        <MudProgressLinear Color="Color.Primary" Striped="true" Rounded="true"
-                           Value="@ProgressPercent(_job.Status)" Class="my-2" Style="width:100%;max-width:400px;" />
+        @if (string.IsNullOrEmpty(_streamingReport))
+        {
+            <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="Size.Large" />
+            <MudText Color="Color.Secondary">@StatusMessage(_job.Status)</MudText>
+            <MudProgressLinear Color="Color.Primary" Striped="true" Rounded="true"
+                               Value="@ProgressPercent(_job.Status)" Class="my-2" Style="width:100%;max-width:400px;" />
+        }
+        else
+        {
+            <MudText Color="Color.Secondary" Class="align-self-start">Generating AI coaching report...</MudText>
+            <MudPaper Elevation="1" Class="pa-4 mb-4" Style="width:100%">
+                <div class="coaching-report">@((MarkupString)Markdown.ToHtml(_streamingReport, _markdigPipeline))</div>
+            </MudPaper>
+        }
         <MudText Typo="Typo.body2" Color="Color.Secondary">Job ID: @JobId</MudText>
     </MudStack>
 }
@@ -152,6 +165,8 @@ else
     private CoachingReport? _report;
     private System.Threading.Timer? _pollTimer;
     private bool _retrying;
+    private string _streamingReport = string.Empty;
+    private CancellationTokenSource _streamCts = new();
 
     private long? _sourceSize;
     private DateTime? _sourceDate;
@@ -173,6 +188,7 @@ else
                 if (_job?.Status == VideoJobStatus.ReportComplete || _job?.Status == VideoJobStatus.Failed)
                     await DisposeTimerAsync();
             }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+            _ = Task.Run(() => ConsumeStreamAsync(_streamCts.Token));
         }
     }
 
@@ -260,6 +276,9 @@ else
     private async Task RetryAsync()
     {
         await DisposeTimerAsync();
+        _streamingReport = string.Empty;
+        _streamCts.Cancel();
+        _streamCts = new CancellationTokenSource();
         _retrying = true;
         StateHasChanged();
         var job = await Db.VideoJobs.FindAsync(JobId);
@@ -291,10 +310,32 @@ else
             if (_job?.Status == VideoJobStatus.ReportComplete || _job?.Status == VideoJobStatus.Failed)
                 await DisposeTimerAsync();
         }, null, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5));
+        _ = Task.Run(() => ConsumeStreamAsync(_streamCts.Token));
+    }
+
+    private async Task ConsumeStreamAsync(CancellationToken ct)
+    {
+        // Poll until a stream is available (job may not have started report gen yet)
+        ChannelReader<string>? reader = null;
+        for (var i = 0; i < 120 && !ct.IsCancellationRequested; i++)
+        {
+            reader = CoachingStreamService.TryGetReader(JobId);
+            if (reader is not null) break;
+            await Task.Delay(500, ct).ConfigureAwait(false);
+        }
+
+        if (reader is null) return;
+
+        await foreach (var chunk in reader.ReadAllAsync(ct).ConfigureAwait(false))
+        {
+            _streamingReport += chunk;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
+        _streamCts.Cancel();
         if (_pollTimer is not null)
             await _pollTimer.DisposeAsync();
     }
