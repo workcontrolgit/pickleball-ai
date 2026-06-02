@@ -92,6 +92,7 @@ try
     builder.Services.AddScoped<ICoachingEngine, OllamaVisionCoachingEngine>();
     builder.Services.AddScoped<VideoProcessingJob>();
     builder.Services.AddSingleton<ICoachingStreamService, CoachingStreamService>();
+    builder.Services.AddSingleton<IJobStatusService, JobStatusService>();
 
     var app = builder.Build();
 
