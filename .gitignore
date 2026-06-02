@@ -10,13 +10,7 @@ obj/
 .superpowers/
 
 # OpenWolf runtime
-.wolf/buglog.json
-.wolf/token-ledger.json
-.wolf/cron-state.json
-.wolf/designqc-report.json
-.wolf/suggestions.json
-.wolf/designqc-captures/
-.wolf/hooks/_session.json
+.wolf/
 
 # Garbled path files (created by tool bug with fullwidth colon in filename)
 c：*
