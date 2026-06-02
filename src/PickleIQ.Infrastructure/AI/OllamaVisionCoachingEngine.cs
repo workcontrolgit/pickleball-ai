@@ -14,6 +14,7 @@ public class OllamaVisionCoachingEngine(
     public async Task<string> GenerateReportHtmlAsync(
         MatchSummary summary,
         IReadOnlyList<byte[]>? coachingFrames = null,
+        Action<string>? onChunk = null,
         CancellationToken cancellationToken = default)
     {
         var endpoint = configuration["Ollama:Endpoint"] ?? "http://localhost:11434";
@@ -49,7 +50,14 @@ public class OllamaVisionCoachingEngine(
 
             var sb = new System.Text.StringBuilder();
             await foreach (var chunk in client.ChatAsync(request, cancellationToken))
-                sb.Append(chunk?.Message?.Content);
+            {
+                var content = chunk?.Message?.Content;
+                if (!string.IsNullOrEmpty(content))
+                {
+                    sb.Append(content);
+                    onChunk?.Invoke(content);
+                }
+            }
 
             return sb.ToString();
         }

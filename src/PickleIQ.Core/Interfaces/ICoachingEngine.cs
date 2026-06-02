@@ -11,5 +11,6 @@ public interface ICoachingEngine
     Task<string> GenerateReportHtmlAsync(
         MatchSummary summary,
         IReadOnlyList<byte[]>? coachingFrames = null,
+        Action<string>? onChunk = null,
         CancellationToken cancellationToken = default);
 }
