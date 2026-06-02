@@ -50,22 +50,18 @@ public class VideoProcessingJob(
 
             logger.LogInformation("Job {JobId}: {Count} rally segments detected", jobId, segments.Count);
 
-            // Step 2: Highlight Generation
+            // Steps 2a/2b/2c — run in parallel
             job.Status = VideoJobStatus.HighlightInProgress;
             await db.SaveChangesAsync();
 
-            var highlightPath = await highlightGenerationService.GenerateAsync(jobId, job.FilePath);
+            var (highlightPath, coachingFrames, totalMatchSeconds) = await RunParallelStepsAsync(job, segments);
+
             if (!string.IsNullOrEmpty(highlightPath))
                 job.HighlightFilePath = highlightPath;
             job.Status = VideoJobStatus.HighlightComplete;
             await db.SaveChangesAsync();
 
             logger.LogInformation("Job {JobId}: highlight reel at {Path}", jobId, highlightPath);
-
-            // Step 3: Sample coaching frames + get video duration
-            var coachingFrames = await frameSampler.SampleAsync(job.FilePath, (IReadOnlyList<(double StartSeconds, double EndSeconds)>)segments);
-            var mediaInfo = await FFProbe.AnalyseAsync(job.FilePath);
-            var totalMatchSeconds = mediaInfo.Duration.TotalSeconds;
 
             // Step 4: Coaching Report
             job.Status = VideoJobStatus.ReportInProgress;
@@ -102,5 +98,19 @@ public class VideoProcessingJob(
             job.ErrorMessage = ex.Message;
             await db.SaveChangesAsync();
         }
+    }
+
+    private async Task<(string? HighlightPath, IReadOnlyList<byte[]> CoachingFrames, double TotalMatchSeconds)>
+        RunParallelStepsAsync(VideoJob job, IList<(double StartSeconds, double EndSeconds)> segments)
+    {
+        var highlightTask = highlightGenerationService.GenerateAsync(job.Id, job.FilePath);
+        var framesTask = frameSampler.SampleAsync(
+            job.FilePath,
+            (IReadOnlyList<(double StartSeconds, double EndSeconds)>)segments);
+        var probeTask = FFProbe.AnalyseAsync(job.FilePath);
+
+        await Task.WhenAll(highlightTask, framesTask, probeTask);
+
+        return (await highlightTask, await framesTask, (await probeTask).Duration.TotalSeconds);
     }
 }
