@@ -16,6 +16,10 @@ obj/
 .wolf/designqc-report.json
 .wolf/suggestions.json
 .wolf/designqc-captures/
+.wolf/hooks/_session.json
+
+# Garbled path files (created by tool bug with fullwidth colon in filename)
+c：*
 
 # Local config
 appsettings.Development.json
@@ -36,3 +40,6 @@ build.log
 # OS
 .DS_Store
 Thumbs.db
+
+# Junk files created by tool with private-use character in name
+c*

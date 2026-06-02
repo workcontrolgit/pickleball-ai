@@ -110,3 +110,6 @@
 | 23:18 | Edited README.md | expanded (+15 lines) | ~243 |
 | 23:18 | Edited README.md | 6→1 lines | ~28 |
 | 23:18 | Session end: 11 writes across 4 files (OllamaVisionCoachingEngine.cs, CoachingFrameSampler.cs, appsettings.json, README.md) | 9 reads | ~3702 tok |
+| 23:27 | Session end: 11 writes across 4 files (OllamaVisionCoachingEngine.cs, CoachingFrameSampler.cs, appsettings.json, README.md) | 9 reads | ~3702 tok |
+| 23:27 | Session end: 11 writes across 4 files (OllamaVisionCoachingEngine.cs, CoachingFrameSampler.cs, appsettings.json, README.md) | 9 reads | ~3702 tok |
+| 23:52 | Edited .gitignore | 7→11 lines | ~71 |
