@@ -17,9 +17,9 @@ public class OllamaVisionCoachingEngine(
         Action<string>? onChunk = null,
         CancellationToken cancellationToken = default)
     {
-        var endpoint = configuration["Ollama:Endpoint"] ?? "http://localhost:11434";
-        var model = configuration["Ollama:Model"] ?? "qwen2-vl:7b";
-        var contextWindow = int.TryParse(configuration["Ollama:ContextWindow"], out var cw) ? cw : 32768;
+        var endpoint = configuration["Coaching:Endpoint"] ?? "http://localhost:11434";
+        var model = configuration["Coaching:Model"] ?? "qwen2-vl:7b";
+        var contextWindow = int.TryParse(configuration["Coaching:ContextWindow"], out var cw) ? cw : 4096;
 
         var frameCount = coachingFrames?.Count ?? 0;
         logger.LogInformation(
