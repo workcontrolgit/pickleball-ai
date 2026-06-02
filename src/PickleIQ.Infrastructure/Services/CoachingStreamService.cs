@@ -16,13 +16,13 @@ public class CoachingStreamService : ICoachingStreamService
             SingleReader = true,
             AllowSynchronousContinuations = false
         });
-        _channels[jobId] = channel;
+        _channels.TryAdd(jobId, channel);
     }
 
     public void WriteChunk(Guid jobId, string chunk)
     {
         if (_channels.TryGetValue(jobId, out var channel))
-            channel.Writer.TryWrite(chunk);
+            _ = channel.Writer.TryWrite(chunk);
     }
 
     public void CompleteStream(Guid jobId)
