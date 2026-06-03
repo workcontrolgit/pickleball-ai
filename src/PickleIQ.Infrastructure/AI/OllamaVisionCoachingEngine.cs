@@ -76,37 +76,62 @@ public class OllamaVisionCoachingEngine(
 
     private static string BuildPrompt(MatchSummary summary, VideoMode mode, int frameCount)
     {
-        var isTraining = mode == VideoMode.Training;
+        string role, statsHeader, segmentLabel, summarySection, frameSection;
 
-        var frameSection = frameCount > 0
-            ? isTraining
-                ? $"""
-                   You are given {frameCount} frames sampled from the training session. Analyse what you can see:
-                   - Court positioning — where is the player standing relative to the kitchen line and baseline?
-                   - Ready position — paddle up, athletic stance, weight forward between shots?
-                   - Footwork — split-step, shuffle steps, crossover footwork, recovery steps visible?
-                   - Paddle and grip — continental vs eastern, wrist position, paddle height?
-                   - Solo movement patterns — court coverage, positioning after each shot, balance?
-                   """
-                : $"""
-                   You are given {frameCount} frames sampled from the rallies. Analyse what you can see:
-                   - Court positioning — are players at the kitchen line, baseline, or transition zone?
-                   - Ready position — paddle up, athletic stance, weight forward between shots?
-                   - Footwork — split-step, shuffle steps, crossover footwork visible?
-                   - Paddle and grip — continental vs eastern, wrist position, paddle height?
-                   - Partner coordination — side-by-side, stacking, covering the middle?
-                   """
-            : isTraining
-                ? "No video frames were available. Base your coaching on the training session statistics only."
-                : "No video frames were available. Base your coaching on the match statistics only.";
+        switch (mode)
+        {
+            case VideoMode.Training:
+                role = "You are a certified pickleball coach reviewing a practice session. The session may involve one player drilling alone, two players in singles practice, or a full doubles team drilling together. Adapt your coaching to what you observe.";
+                statsHeader = "Training session data:";
+                segmentLabel = "Active segments detected";
+                summarySection = "## Session Summary";
+                frameSection = frameCount > 0
+                    ? $"""
+                       You are given {frameCount} frames sampled from the practice session. Analyse what you can see:
+                       - Number of players visible and the likely drill format (solo, singles, doubles)
+                       - Court positioning — relative to the kitchen line and baseline?
+                       - Ready position — paddle up, athletic stance, weight forward between shots?
+                       - Footwork — split-step, shuffle steps, crossover footwork, recovery steps?
+                       - Paddle and grip — continental vs eastern, wrist position, paddle height?
+                       - Drill execution — repetition quality, consistency, cooperative feeding if a partner is present?
+                       """
+                    : "No video frames were available. Base your coaching on the training session statistics only.";
+                break;
 
-        var role = isTraining
-            ? "You are a certified pickleball coach reviewing a solo training session."
-            : "You are a certified pickleball coach reviewing a recreational doubles match.";
+            case VideoMode.FollowCam:
+                role = "You are a certified pickleball coach reviewing a competitive match filmed with a follow-cam tracking one specific player throughout. Player count per frame will vary — the tracked player may be isolated or surrounded by all four players depending on court position.";
+                statsHeader = "Match data (follow-cam):";
+                segmentLabel = "Rallies detected";
+                summarySection = "## Match Summary";
+                frameSection = frameCount > 0
+                    ? $"""
+                       You are given {frameCount} frames tracking one player through the match. Focus your analysis on that player:
+                       - Court positioning — kitchen line, transition zone, or baseline during each phase?
+                       - Decision-making under pressure — when to dink, drive, or lob?
+                       - Ready position and reset — recovering between shots, paddle height, weight transfer?
+                       - Footwork — split-step timing, lateral movement, closing to the kitchen?
+                       - Competitive awareness — positioning relative to opponents when visible, shot selection given court situation?
+                       """
+                    : "No video frames were available. Base your coaching on the match statistics only.";
+                break;
 
-        var statsHeader = isTraining ? "Training session data:" : "Match data:";
-        var segmentLabel = isTraining ? "Active segments detected" : "Rallies detected";
-        var summarySection = isTraining ? "## Session Summary" : "## Match Summary";
+            default: // Match
+                role = "You are a certified pickleball coach reviewing a recreational doubles match.";
+                statsHeader = "Match data:";
+                segmentLabel = "Rallies detected";
+                summarySection = "## Match Summary";
+                frameSection = frameCount > 0
+                    ? $"""
+                       You are given {frameCount} frames sampled from the rallies. Analyse what you can see:
+                       - Court positioning — are players at the kitchen line, baseline, or transition zone?
+                       - Ready position — paddle up, athletic stance, weight forward between shots?
+                       - Footwork — split-step, shuffle steps, crossover footwork visible?
+                       - Paddle and grip — continental vs eastern, wrist position, paddle height?
+                       - Partner coordination — side-by-side, stacking, covering the middle?
+                       """
+                    : "No video frames were available. Base your coaching on the match statistics only.";
+                break;
+        }
 
         return $"""
                 {role}
@@ -141,9 +166,8 @@ public class OllamaVisionCoachingEngine(
 
     private static string GenerateFallbackMarkdown(MatchSummary summary, VideoMode mode)
     {
-        var isTraining = mode == VideoMode.Training;
-        var header = isTraining ? "## Training Statistics" : "## Match Statistics";
-        var segmentLabel = isTraining ? "Active segments detected" : "Rallies detected";
+        var header = mode == VideoMode.Training ? "## Training Statistics" : "## Match Statistics";
+        var segmentLabel = mode == VideoMode.Training ? "Active segments detected" : "Rallies detected";
 
         return $"""
                 > AI coaching engine unavailable. Showing statistical summary.

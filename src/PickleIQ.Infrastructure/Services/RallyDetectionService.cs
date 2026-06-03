@@ -83,7 +83,7 @@ public class RallyDetectionService(
 
         var activeTimestamps = new List<double>();
         var secondsPerFrame = 1.0 / FrameRateFps;
-        var minPlayers = mode == VideoMode.Training ? 1 : 2;
+        var minPlayers = mode is VideoMode.Training or VideoMode.FollowCam ? 1 : 2;
 
         var useGpuYolo = bool.TryParse(configuration["Processing:UseGpuYolo"], out var gy) && gy;
         Yolo? yolo = null;

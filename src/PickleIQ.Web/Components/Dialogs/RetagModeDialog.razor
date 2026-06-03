@@ -7,10 +7,13 @@
     </MudText>
     <MudRadioGroup T="VideoMode" @bind-Value="_mode">
         <MudRadio Value="VideoMode.Match" Color="Color.Primary">
-            <MudText Typo="Typo.body1"><strong>Match</strong> — requires 2+ players per frame</MudText>
+            <MudText Typo="Typo.body1"><strong>Match</strong> — fixed cam, requires 2+ players per frame</MudText>
         </MudRadio>
         <MudRadio Value="VideoMode.Training" Color="Color.Secondary">
-            <MudText Typo="Typo.body1"><strong>Training</strong> — detects single player per frame</MudText>
+            <MudText Typo="Typo.body1"><strong>Training</strong> — solo, singles, or doubles drills</MudText>
+        </MudRadio>
+        <MudRadio Value="VideoMode.FollowCam" Color="Color.Tertiary">
+            <MudText Typo="Typo.body1"><strong>Follow-Cam</strong> — Osmo tracking one player in a match</MudText>
         </MudRadio>
     </MudRadioGroup>
 </MudDialogContent>
