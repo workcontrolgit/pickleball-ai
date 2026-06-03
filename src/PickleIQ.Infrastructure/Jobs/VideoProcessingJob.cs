@@ -35,7 +35,7 @@ public class VideoProcessingJob(
             await db.SaveChangesAsync();
             jobStatusService.PushStatus(jobId, job.Status);
 
-            var segments = await rallyDetectionService.DetectRalliesAsync(job.FilePath);
+            var segments = await rallyDetectionService.DetectRalliesAsync(job.FilePath, job.Mode);
 
             foreach (var (start, end) in segments)
             {
@@ -88,6 +88,7 @@ public class VideoProcessingJob(
             {
                 var report = await coachingEngine.GenerateReportHtmlAsync(
                     summary,
+                    job.Mode,
                     coachingFrames,
                     onChunk: chunk => coachingStreamService.WriteChunk(jobId, chunk));
 

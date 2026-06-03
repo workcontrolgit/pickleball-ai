@@ -14,7 +14,7 @@ public class VideoStorageService(
     IBackgroundJobClient backgroundJobClient,
     ILogger<VideoStorageService> logger) : IVideoStorageService
 {
-    public async Task<Guid> SaveAsync(Stream fileStream, string fileName, long fileSize, CancellationToken cancellationToken = default)
+    public async Task<Guid> SaveAsync(Stream fileStream, string fileName, long fileSize, VideoMode mode = VideoMode.Match, CancellationToken cancellationToken = default)
     {
         var basePath = configuration["VideoStorage:BasePath"] ?? "C:/temp/pickleiq/videos";
         Directory.CreateDirectory(basePath);
@@ -31,7 +31,8 @@ public class VideoStorageService(
             Id = jobId,
             FileName = fileName,
             FilePath = filePath,
-            Status = VideoJobStatus.Queued
+            Status = VideoJobStatus.Queued,
+            Mode = mode
         };
 
         db.VideoJobs.Add(job);

@@ -1,5 +1,6 @@
 @page "/upload"
 @using PickleIQ.Core.Interfaces
+@using PickleIQ.Core.Entities
 @using Microsoft.Extensions.Configuration
 @inject IVideoStorageService VideoStorageService
 @inject NavigationManager Navigation
@@ -10,12 +11,28 @@
 
 <MudText Typo="Typo.h4" Class="mb-1">Upload Your Match Video</MudText>
 <MudText Typo="Typo.body1" Color="Color.Secondary" Class="mb-6">
-    Upload an MP4 of your match and receive an AI-generated highlight reel and coaching report.
+    Upload an MP4 of your match or training session and receive an AI-generated highlight reel and coaching report.
 </MudText>
 
 <MudPaper MaxWidth="600px" Class="pa-6 mx-auto" Elevation="2">
     @if (!_uploading)
     {
+        <MudRadioGroup T="VideoMode" @bind-Value="_selectedMode" Class="mb-4">
+            <MudStack Row="true" Spacing="3">
+                <MudRadio Value="VideoMode.Match" Color="Color.Primary">
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.body1"><strong>Match</strong></MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Doubles or singles game</MudText>
+                    </MudStack>
+                </MudRadio>
+                <MudRadio Value="VideoMode.Training" Color="Color.Secondary">
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.body1"><strong>Training</strong></MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Solo drill or practice session</MudText>
+                    </MudStack>
+                </MudRadio>
+            </MudStack>
+        </MudRadioGroup>
         @* Hidden native file input — Blazor reads files from this *@
         <InputFile id="upload-input" style="display:none"
                    accept=".mp4,.MP4,.mov,.MOV"
@@ -74,6 +91,7 @@
 @code {
     private long _maxFileSizeGb;
     private long MaxFileSizeBytes => _maxFileSizeGb * 1024 * 1024 * 1024;
+    private VideoMode _selectedMode = VideoMode.Match;
 
     private IBrowserFile? _selectedFile;
     private bool _uploading;
@@ -115,7 +133,7 @@
         try
         {
             await using var stream = _selectedFile.OpenReadStream(MaxFileSizeBytes);
-            var jobId = await VideoStorageService.SaveAsync(stream, _selectedFile.Name, _selectedFile.Size);
+            var jobId = await VideoStorageService.SaveAsync(stream, _selectedFile.Name, _selectedFile.Size, _selectedMode);
             Navigation.NavigateTo($"/results/{jobId}");
         }
         catch (Exception ex)

@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.HasKey(v => v.Id);
             e.Property(v => v.Status).HasConversion<string>();
+            e.Property(v => v.Mode).HasConversion<string>();
             e.HasMany(v => v.RallySegments).WithOne(r => r.VideoJob).HasForeignKey(r => r.VideoJobId);
             e.HasOne(v => v.CoachingReport).WithOne(r => r.VideoJob).HasForeignKey<CoachingReport>(r => r.VideoJobId);
         });
