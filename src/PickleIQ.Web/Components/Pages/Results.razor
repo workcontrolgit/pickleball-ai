@@ -7,6 +7,7 @@
 @using PickleIQ.Core.Interfaces
 @using Markdig
 @using System.Threading.Channels
+@using PickleIQ.Web.Components.Dialogs
 @inject AppDbContext Db
 @inject NavigationManager Navigation
 @inject IBackgroundJobClient JobClient
@@ -17,7 +18,15 @@
 
 <PageTitle>Results — PickleIQ</PageTitle>
 
-<MudText Typo="Typo.h4" Class="mb-4">Match Results</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
+    <MudText Typo="Typo.h4">@(_job?.Mode == VideoMode.Training ? "Training Results" : "Match Results")</MudText>
+    @if (_job is not null)
+    {
+        <MudChip T="string" Color="Color.Default" Size="Size.Small">
+            @(_job.Mode == VideoMode.Training ? "Training" : "Match")
+        </MudChip>
+    }
+</MudStack>
 
 @if (_job is null)
 {
@@ -33,9 +42,13 @@ else if (_job.Status == VideoJobStatus.Failed)
         <MudText>@(_job.ErrorMessage ?? "An unexpected error occurred.")</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary">Job ID: @JobId</MudText>
     </MudAlert>
-    <MudStack Row="true" Spacing="2">
-        <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="RetryAsync" Disabled="_retrying">
+    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="@(async () => await RetryAsync())" Disabled="_retrying">
             @(_retrying ? "Retrying…" : "Retry")
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Info" OnClick="ConfirmRetagAsync" Disabled="_retrying"
+                   StartIcon="@Icons.Material.Filled.SwapHoriz">
+            Change Mode & Reprocess
         </MudButton>
         <MudButton Href="/upload" Variant="Variant.Filled" Color="Color.Primary">Try another video</MudButton>
     </MudStack>
@@ -63,12 +76,12 @@ else if (_job.Status != VideoJobStatus.ReportComplete)
 else
 {
     <!-- Rally Statistics -->
-    <MudText Typo="Typo.h5" Class="mb-3">Rally Statistics</MudText>
+    <MudText Typo="Typo.h5" Class="mb-3">@(_job.Mode == VideoMode.Training ? "Training Statistics" : "Rally Statistics")</MudText>
     <MudGrid Spacing="3" Class="mb-4">
         <MudItem xs="12" sm="4">
             <MudPaper Elevation="2" Class="pa-4 text-center">
                 <MudText Typo="Typo.h3" Color="Color.Primary">@_segments.Count</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Rallies Detected</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@(_job.Mode == VideoMode.Training ? "Active Segments" : "Rallies Detected")</MudText>
             </MudPaper>
         </MudItem>
         <MudItem xs="12" sm="4">
@@ -151,6 +164,10 @@ else
         }
         <MudButton Variant="Variant.Outlined" Color="Color.Warning" OnClick="ConfirmReprocessAsync" Disabled="_retrying">
             @(_retrying ? "Reprocessing…" : "Reprocess")
+        </MudButton>
+        <MudButton Variant="Variant.Outlined" Color="Color.Info" OnClick="ConfirmRetagAsync" Disabled="_retrying"
+                   StartIcon="@Icons.Material.Filled.SwapHoriz">
+            Change Mode & Reprocess
         </MudButton>
     </MudStack>
 }
@@ -328,7 +345,19 @@ else
         await RetryAsync();
     }
 
-    private async Task RetryAsync()
+    private async Task ConfirmRetagAsync()
+    {
+        if (_job is null) return;
+        var parameters = new DialogParameters<RetagModeDialog> { { d => d.CurrentMode, _job.Mode } };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraSmall };
+        var dialog = await DialogService.ShowAsync<RetagModeDialog>("Change Mode & Reprocess", parameters, options);
+        var result = await dialog.Result;
+        if (result is null || result.Canceled) return;
+        var newMode = (VideoMode)result.Data!;
+        await RetryAsync(newMode);
+    }
+
+    private async Task RetryAsync(VideoMode? newMode = null)
     {
         JobStatusService.Unsubscribe(JobId);
         await DisposeFallbackTimerAsync();
@@ -347,6 +376,7 @@ else
         var job = await Db.VideoJobs.FindAsync(JobId);
         if (job is not null && (job.Status == VideoJobStatus.Failed || job.Status == VideoJobStatus.ReportComplete))
         {
+            if (newMode.HasValue) job.Mode = newMode.Value;
             Db.RallySegments.RemoveRange(Db.RallySegments.Where(s => s.VideoJobId == JobId));
             var report = await Db.CoachingReports.FirstOrDefaultAsync(r => r.VideoJobId == JobId);
             if (report is not null) Db.CoachingReports.Remove(report);

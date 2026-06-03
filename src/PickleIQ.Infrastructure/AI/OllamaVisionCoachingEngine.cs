@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using OllamaSharp;
 using OllamaSharp.Models;
 using OllamaSharp.Models.Chat;
+using PickleIQ.Core.Entities;
 using PickleIQ.Core.Interfaces;
 
 namespace PickleIQ.Infrastructure.AI;
@@ -13,6 +14,7 @@ public class OllamaVisionCoachingEngine(
 {
     public async Task<string> GenerateReportHtmlAsync(
         MatchSummary summary,
+        VideoMode mode = VideoMode.Match,
         IReadOnlyList<byte[]>? coachingFrames = null,
         Action<string>? onChunk = null,
         CancellationToken cancellationToken = default)
@@ -34,7 +36,7 @@ public class OllamaVisionCoachingEngine(
             var message = new Message
             {
                 Role = ChatRole.User,
-                Content = BuildPrompt(summary, frameCount),
+                Content = BuildPrompt(summary, mode, frameCount),
                 Images = frameCount > 0
                     ? coachingFrames!.Select(f => Convert.ToBase64String(f)).ToArray()
                     : null
@@ -68,31 +70,52 @@ public class OllamaVisionCoachingEngine(
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Ollama unavailable — using fallback coaching report");
-            return GenerateFallbackMarkdown(summary);
+            return GenerateFallbackMarkdown(summary, mode);
         }
     }
 
-    private static string BuildPrompt(MatchSummary summary, int frameCount)
+    private static string BuildPrompt(MatchSummary summary, VideoMode mode, int frameCount)
     {
+        var isTraining = mode == VideoMode.Training;
+
         var frameSection = frameCount > 0
-            ? $"""
-               You are given {frameCount} frames sampled from the rallies. Analyse what you can see:
-               - Court positioning — are players at the kitchen line, baseline, or transition zone?
-               - Ready position — paddle up, athletic stance, weight forward between shots?
-               - Footwork — split-step, shuffle steps, crossover footwork visible?
-               - Paddle and grip — continental vs eastern, wrist position, paddle height?
-               - Partner coordination — side-by-side, stacking, covering the middle?
-               """
-            : "No video frames were available. Base your coaching on the match statistics only.";
+            ? isTraining
+                ? $"""
+                   You are given {frameCount} frames sampled from the training session. Analyse what you can see:
+                   - Court positioning — where is the player standing relative to the kitchen line and baseline?
+                   - Ready position — paddle up, athletic stance, weight forward between shots?
+                   - Footwork — split-step, shuffle steps, crossover footwork, recovery steps visible?
+                   - Paddle and grip — continental vs eastern, wrist position, paddle height?
+                   - Solo movement patterns — court coverage, positioning after each shot, balance?
+                   """
+                : $"""
+                   You are given {frameCount} frames sampled from the rallies. Analyse what you can see:
+                   - Court positioning — are players at the kitchen line, baseline, or transition zone?
+                   - Ready position — paddle up, athletic stance, weight forward between shots?
+                   - Footwork — split-step, shuffle steps, crossover footwork visible?
+                   - Paddle and grip — continental vs eastern, wrist position, paddle height?
+                   - Partner coordination — side-by-side, stacking, covering the middle?
+                   """
+            : isTraining
+                ? "No video frames were available. Base your coaching on the training session statistics only."
+                : "No video frames were available. Base your coaching on the match statistics only.";
+
+        var role = isTraining
+            ? "You are a certified pickleball coach reviewing a solo training session."
+            : "You are a certified pickleball coach reviewing a recreational doubles match.";
+
+        var statsHeader = isTraining ? "Training session data:" : "Match data:";
+        var segmentLabel = isTraining ? "Active segments detected" : "Rallies detected";
+        var summarySection = isTraining ? "## Session Summary" : "## Match Summary";
 
         return $"""
-                You are a certified pickleball coach reviewing a recreational doubles match.
+                {role}
 
-                Match data:
-                - Rallies detected: {summary.RallyCount}
-                - Average rally length: {summary.AverageRallySeconds:F1} seconds
-                - Longest rally: {summary.LongestRallySeconds:F1} seconds
-                - Total match duration: {summary.TotalMatchSeconds / 60:F0} minutes
+                {statsHeader}
+                - {segmentLabel}: {summary.RallyCount}
+                - Average segment length: {summary.AverageRallySeconds:F1} seconds
+                - Longest segment: {summary.LongestRallySeconds:F1} seconds
+                - Total duration: {summary.TotalMatchSeconds / 60:F0} minutes
 
                 {frameSection}
 
@@ -100,7 +123,7 @@ public class OllamaVisionCoachingEngine(
                 ## Strengths
                 ## Areas for Improvement
                 ## Recommended Drills
-                ## Match Summary
+                {summarySection}
 
                 Use bullet points under each section. Keep tone encouraging and actionable. Be specific to pickleball.
                 """;
@@ -116,17 +139,23 @@ public class OllamaVisionCoachingEngine(
         return text;
     }
 
-    private static string GenerateFallbackMarkdown(MatchSummary summary) =>
-        $"""
-         > AI coaching engine unavailable. Showing statistical summary.
+    private static string GenerateFallbackMarkdown(MatchSummary summary, VideoMode mode)
+    {
+        var isTraining = mode == VideoMode.Training;
+        var header = isTraining ? "## Training Statistics" : "## Match Statistics";
+        var segmentLabel = isTraining ? "Active segments detected" : "Rallies detected";
 
-         ## Match Statistics
+        return $"""
+                > AI coaching engine unavailable. Showing statistical summary.
 
-         - Rallies detected: {summary.RallyCount}
-         - Average rally length: {summary.AverageRallySeconds:F1} seconds
-         - Longest rally: {summary.LongestRallySeconds:F1} seconds
-         - Total match: {summary.TotalMatchSeconds / 60:F0} minutes
+                {header}
 
-         Start Ollama locally and run your configured model, then reprocess to get AI coaching feedback.
-         """;
+                - {segmentLabel}: {summary.RallyCount}
+                - Average segment length: {summary.AverageRallySeconds:F1} seconds
+                - Longest segment: {summary.LongestRallySeconds:F1} seconds
+                - Total duration: {summary.TotalMatchSeconds / 60:F0} minutes
+
+                Start Ollama locally and run your configured model, then reprocess to get AI coaching feedback.
+                """;
+    }
 }

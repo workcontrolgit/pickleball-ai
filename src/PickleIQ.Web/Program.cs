@@ -68,9 +68,9 @@ try
     builder.Services.AddServerSideBlazor(options =>
         options.MaxBufferedUnacknowledgedRenderBatches = 20);
 
-    const long fiveGb = 5L * 1024 * 1024 * 1024;
+    var maxFileSizeGb = builder.Configuration.GetValue<long>("Upload:MaxFileSizeGb", 12);
     builder.Services.AddSignalR(options =>
-        options.MaximumReceiveMessageSize = fiveGb);
+        options.MaximumReceiveMessageSize = maxFileSizeGb * 1024 * 1024 * 1024);
 
     builder.Services.AddMudServices();
 

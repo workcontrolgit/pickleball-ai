@@ -4,6 +4,7 @@
 @using PickleIQ.Core.Entities
 @using PickleIQ.Infrastructure.Data
 @using PickleIQ.Infrastructure.Jobs
+@using PickleIQ.Web.Components.Dialogs
 @inject AppDbContext Db
 @inject IBackgroundJobClient JobClient
 @inject IDialogService DialogService
@@ -39,6 +40,7 @@ else
             <HeaderContent>
                 <MudTh>File</MudTh>
                 <MudTh>Status</MudTh>
+                <MudTh>Mode</MudTh>
                 <MudTh>Uploaded</MudTh>
                 <MudTh>Video Size</MudTh>
                 <MudTh>Highlight Size</MudTh>
@@ -52,6 +54,9 @@ else
                     <MudChip T="string" Color="@ChipColor(context.Status)" Size="Size.Small">
                         @StatusLabel(context.Status)
                     </MudChip>
+                </MudTd>
+                <MudTd>
+                    <MudChip T="string" Color="Color.Default" Size="Size.Small">@ModeLabel(context.Mode)</MudChip>
                 </MudTd>
                 <MudTd>
                     <MudText Typo="Typo.body2" Color="Color.Secondary">
@@ -80,9 +85,12 @@ else
                     <MudCardContent>
                         <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-1">
                             <MudText Typo="Typo.body1" Style="font-weight:600">@job.FileName</MudText>
-                            <MudChip T="string" Color="@ChipColor(job.Status)" Size="Size.Small">
-                                @StatusLabel(job.Status)
-                            </MudChip>
+                            <MudStack Row="true" Spacing="1">
+                                <MudChip T="string" Color="Color.Default" Size="Size.Small">@ModeLabel(job.Mode)</MudChip>
+                                <MudChip T="string" Color="@ChipColor(job.Status)" Size="Size.Small">
+                                    @StatusLabel(job.Status)
+                                </MudChip>
+                            </MudStack>
                         </MudStack>
                         <MudText Typo="Typo.body2" Color="Color.Secondary">
                             @job.CreatedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
@@ -112,6 +120,7 @@ else
     private List<VideoJob>? _jobs;
     private readonly HashSet<Guid> _retrying = [];
     private readonly HashSet<Guid> _deleting = [];
+    private readonly HashSet<Guid> _retagging = [];
 
     protected override async Task OnInitializedAsync() => await LoadJobsAsync();
 
@@ -144,6 +153,11 @@ else
                              OnClick="@(async () => await ConfirmReprocessAsync(job.Id))">
                     @(_retrying.Contains(job.Id) ? "Reprocessing…" : "Reprocess")
                 </MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.SwapHoriz"
+                             Disabled="_retagging.Contains(job.Id)"
+                             OnClick="@(async () => await RetagAndReprocessAsync(job.Id, job.Mode))">
+                    @(_retagging.Contains(job.Id) ? "Changing Mode…" : "Change Mode & Reprocess")
+                </MudMenuItem>
                 <MudDivider />
                 <MudMenuItem Icon="@Icons.Material.Filled.Delete"
                              Style="color: var(--mud-palette-error);"
@@ -165,6 +179,11 @@ else
                 <MudMenuItem Icon="@Icons.Material.Filled.Info"
                              Href="@($"/results/{job.Id}")">
                     Details
+                </MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.SwapHoriz"
+                             Disabled="_retagging.Contains(job.Id)"
+                             OnClick="@(async () => await RetagAndReprocessAsync(job.Id, job.Mode))">
+                    @(_retagging.Contains(job.Id) ? "Changing Mode…" : "Change Mode & Reprocess")
                 </MudMenuItem>
                 <MudDivider />
                 <MudMenuItem Icon="@Icons.Material.Filled.Delete"
@@ -275,6 +294,46 @@ else
             };
         }
         catch { return "—"; }
+    }
+
+    private static string ModeLabel(VideoMode mode) => mode switch
+    {
+        VideoMode.Training => "Training",
+        _ => "Match"
+    };
+
+    private async Task RetagAndReprocessAsync(Guid jobId, VideoMode currentMode)
+    {
+        var parameters = new DialogParameters<RetagModeDialog> { { d => d.CurrentMode, currentMode } };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraSmall };
+        var dialog = await DialogService.ShowAsync<RetagModeDialog>("Change Mode & Reprocess", parameters, options);
+        var result = await dialog.Result;
+        if (result is null || result.Canceled) return;
+        var newMode = (VideoMode)result.Data!;
+
+        _retagging.Add(jobId);
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var job = await Db.VideoJobs.FindAsync(jobId);
+            if (job is null) return;
+            job.Mode = newMode;
+            Db.RallySegments.RemoveRange(Db.RallySegments.Where(s => s.VideoJobId == jobId));
+            var report = await Db.CoachingReports.FirstOrDefaultAsync(r => r.VideoJobId == jobId);
+            if (report is not null) Db.CoachingReports.Remove(report);
+            job.Status = VideoJobStatus.Queued;
+            job.ErrorMessage = null;
+            job.HighlightFilePath = null;
+            job.CompletedAt = null;
+            await Db.SaveChangesAsync();
+            try { JobClient.Enqueue<VideoProcessingJob>(j => j.ProcessAsync(jobId)); } catch { }
+        }
+        finally
+        {
+            _retagging.Remove(jobId);
+            await LoadJobsAsync();
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private static string StatusLabel(VideoJobStatus status) => status switch

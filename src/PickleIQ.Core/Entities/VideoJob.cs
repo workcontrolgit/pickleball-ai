@@ -1,5 +1,11 @@
 namespace PickleIQ.Core.Entities;
 
+public enum VideoMode
+{
+    Match,
+    Training
+}
+
 public enum VideoJobStatus
 {
     Queued,
@@ -22,6 +28,7 @@ public class VideoJob
     public string? ErrorMessage { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAt { get; set; }
+    public VideoMode Mode { get; set; } = VideoMode.Match;
 
     public ICollection<RallySegment> RallySegments { get; set; } = new List<RallySegment>();
     public CoachingReport? CoachingReport { get; set; }

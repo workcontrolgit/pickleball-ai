@@ -1,3 +1,5 @@
+using PickleIQ.Core.Entities;
+
 namespace PickleIQ.Core.Interfaces;
 
 public record MatchSummary(
@@ -10,6 +12,7 @@ public interface ICoachingEngine
 {
     Task<string> GenerateReportHtmlAsync(
         MatchSummary summary,
+        VideoMode mode = VideoMode.Match,
         IReadOnlyList<byte[]>? coachingFrames = null,
         Action<string>? onChunk = null,
         CancellationToken cancellationToken = default);

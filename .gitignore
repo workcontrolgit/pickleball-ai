@@ -10,12 +10,10 @@ obj/
 .superpowers/
 
 # OpenWolf runtime
-.wolf/buglog.json
-.wolf/token-ledger.json
-.wolf/cron-state.json
-.wolf/designqc-report.json
-.wolf/suggestions.json
-.wolf/designqc-captures/
+.wolf/
+
+# Garbled path files (created by tool bug with fullwidth colon in filename)
+c：*
 
 # Local config
 appsettings.Development.json
@@ -36,3 +34,6 @@ build.log
 # OS
 .DS_Store
 Thumbs.db
+
+# Junk files created by tool with private-use character in name
+c*

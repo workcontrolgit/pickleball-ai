@@ -2,6 +2,7 @@ using FFMpegCore;
 using FFMpegCore.Enums;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using PickleIQ.Core.Entities;
 using PickleIQ.Core.Interfaces;
 using SkiaSharp;
 using YoloDotNet;
@@ -19,10 +20,9 @@ public class RallyDetectionService(
     private const double MinRallySeconds = 3.0;
     private const double GapToleranceSeconds = 1.0;
     private const float PersonConfidenceThreshold = 0.4f;
-    private const int MinPlayersForActiveFrame = 2;
 
     public async Task<IList<(double StartSeconds, double EndSeconds)>> DetectRalliesAsync(
-        string videoPath, CancellationToken cancellationToken = default)
+        string videoPath, VideoMode mode = VideoMode.Match, CancellationToken cancellationToken = default)
     {
         var ffOptions = FFmpegLocator.GetOptions(configuration);
         logger.LogInformation("Starting rally detection for {VideoPath}", videoPath);
@@ -45,7 +45,7 @@ public class RallyDetectionService(
             var modelPath = configuration["YoloModel:Path"]
                 ?? Path.Combine(AppContext.BaseDirectory, "Models", "yolo11n.onnx");
 
-            var activeFrames = DetectActiveFrames(frameFiles, modelPath);
+            var activeFrames = DetectActiveFrames(frameFiles, modelPath, mode);
 
             // Group active frames into rally segments
             var segments = GroupIntoSegments(activeFrames);
@@ -73,7 +73,7 @@ public class RallyDetectionService(
             .ProcessAsynchronously(true, ffOptions);
     }
 
-    private List<double> DetectActiveFrames(List<string> frameFiles, string modelPath)
+    private List<double> DetectActiveFrames(List<string> frameFiles, string modelPath, VideoMode mode)
     {
         if (!File.Exists(modelPath))
         {
@@ -83,6 +83,7 @@ public class RallyDetectionService(
 
         var activeTimestamps = new List<double>();
         var secondsPerFrame = 1.0 / FrameRateFps;
+        var minPlayers = mode == VideoMode.Training ? 1 : 2;
 
         var useGpuYolo = bool.TryParse(configuration["Processing:UseGpuYolo"], out var gy) && gy;
         Yolo? yolo = null;
@@ -133,7 +134,7 @@ public class RallyDetectionService(
                     var detections = yolo.RunObjectDetection(bitmap, confidence: PersonConfidenceThreshold, iou: 0.5f);
                     var personCount = detections.Count(d => d.Label.Name == "person");
 
-                    if (personCount >= MinPlayersForActiveFrame)
+                    if (personCount >= minPlayers)
                         activeTimestamps.Add(frameTimestamp);
                 }
                 catch (Exception ex)
