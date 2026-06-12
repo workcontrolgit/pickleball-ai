@@ -1,3 +1,7 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Threading.Channels;
 using FFMpegCore;
 using FFMpegCore.Enums;
 using Microsoft.Extensions.Configuration;
@@ -181,5 +185,81 @@ public class RallyDetectionService(
             segments.Add((segStart, segEnd));
 
         return segments;
+    }
+
+    private static async ValueTask<int> ReadExactAsync(
+        Stream stream, byte[] buffer, int count, CancellationToken ct)
+    {
+        int totalRead = 0;
+        while (totalRead < count)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(totalRead, count - totalRead), ct);
+            if (read == 0) break;
+            totalRead += read;
+        }
+        return totalRead;
+    }
+
+    private async Task RunProducerAsync(
+        string videoPath,
+        int scaledH,
+        int frameSize,
+        ChannelWriter<(int Index, SKBitmap Frame)> writer,
+        FFOptions ffOptions,
+        CancellationTokenSource cts)
+    {
+        var ffmpegExe = Path.Combine(ffOptions.BinaryFolder ?? "", "ffmpeg.exe");
+        if (!File.Exists(ffmpegExe)) ffmpegExe = "ffmpeg";
+
+        var args = $"-y -i \"{videoPath.Replace("\\", "/")}\" " +
+                   $"-vf scale=640:{scaledH},fps={FrameRateFps} " +
+                   $"-f rawvideo -pix_fmt bgra pipe:1";
+
+        var psi = new ProcessStartInfo(ffmpegExe, args)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        try
+        {
+            using var proc = Process.Start(psi)!;
+            var stdout = proc.StandardOutput.BaseStream;
+            var buffer = new byte[frameSize];
+            var frameIndex = 0;
+
+            while (true)
+            {
+                var bytesRead = await ReadExactAsync(stdout, buffer, frameSize, cts.Token);
+                if (bytesRead < frameSize) break;
+
+                var bmp = new SKBitmap(new SKImageInfo(640, scaledH, SKColorType.Bgra8888, SKAlphaType.Opaque));
+                Marshal.Copy(buffer, 0, bmp.GetPixels(), frameSize);
+
+                await writer.WriteAsync((frameIndex++, bmp), cts.Token);
+            }
+
+            await proc.WaitForExitAsync(cts.Token);
+
+            if (proc.ExitCode != 0)
+            {
+                var stderr = await proc.StandardError.ReadToEndAsync(cts.Token);
+                throw new InvalidOperationException(
+                    $"FFmpeg exited {proc.ExitCode}: {stderr[..Math.Min(500, stderr.Length)]}");
+            }
+
+            logger.LogInformation("Producer: streamed {Count} frames", frameIndex);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            cts.Cancel();
+            throw;
+        }
+        finally
+        {
+            writer.Complete();
+        }
     }
 }
