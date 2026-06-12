@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
 using FFMpegCore;
-using FFMpegCore.Enums;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PickleIQ.Core.Entities;
@@ -28,39 +27,16 @@ public class RallyDetectionService(
     public async Task<IList<(double StartSeconds, double EndSeconds)>> DetectRalliesAsync(
         string videoPath, VideoMode mode = VideoMode.Match, CancellationToken cancellationToken = default)
     {
-        var ffOptions = FFmpegLocator.GetOptions(configuration);
         logger.LogInformation("Starting rally detection for {VideoPath}", videoPath);
 
-        var framesDir = Path.Combine(Path.GetTempPath(), $"pickleiq-frames-{Guid.NewGuid()}");
-        Directory.CreateDirectory(framesDir);
+        var activeTimestamps = await RunDetectionPipelineAsync(videoPath, mode, cancellationToken);
 
-        try
-        {
-            // Extract frames at 2fps
-            await ExtractFramesAsync(videoPath, framesDir, ffOptions, cancellationToken);
+        logger.LogInformation("Active in {Count} frames", activeTimestamps.Count);
 
-            var frameFiles = Directory.GetFiles(framesDir, "*.jpg")
-                .OrderBy(f => f)
-                .ToList();
+        var segments = GroupIntoSegments(activeTimestamps);
 
-            logger.LogInformation("Extracted {Count} frames", frameFiles.Count);
-
-            // Detect players in each frame
-            var modelPath = configuration["YoloModel:Path"]
-                ?? Path.Combine(AppContext.BaseDirectory, "Models", "yolo11n.onnx");
-
-            var activeFrames = DetectActiveFrames(frameFiles, modelPath, mode);
-
-            // Group active frames into rally segments
-            var segments = GroupIntoSegments(activeFrames);
-
-            logger.LogInformation("Detected {Count} rally segments", segments.Count);
-            return segments;
-        }
-        finally
-        {
-            Directory.Delete(framesDir, recursive: true);
-        }
+        logger.LogInformation("Detected {Count} rally segments", segments.Count);
+        return segments;
     }
 
     internal static int ComputeScaledHeight(int nativeW, int nativeH, int targetW)
@@ -69,92 +45,41 @@ public class RallyDetectionService(
         return h % 2 == 0 ? h : h + 1;
     }
 
-    private static async Task ExtractFramesAsync(string videoPath, string outputDir, FFOptions ffOptions, CancellationToken cancellationToken)
+    private async Task<List<double>> RunDetectionPipelineAsync(
+        string videoPath, VideoMode mode, CancellationToken cancellationToken)
     {
-        await FFMpegArguments
-            .FromFileInput(videoPath)
-            .OutputToFile(
-                Path.Combine(outputDir, "frame-%05d.jpg"),
-                overwrite: true,
-                options => options
-                    .WithVideoFilters(f => f.Scale(640, -2))   // -2 = nearest even number (YOLO requires even dims)
-                    .WithFramerate(FrameRateFps)
-                    .ForceFormat("image2"))
-            .ProcessAsynchronously(true, ffOptions);
-    }
-
-    private List<double> DetectActiveFrames(List<string> frameFiles, string modelPath, VideoMode mode)
-    {
-        if (!File.Exists(modelPath))
-        {
-            logger.LogWarning("YOLO model not found at {ModelPath}. Rally detection will return empty results.", modelPath);
-            return [];
-        }
-
-        var activeTimestamps = new List<double>();
-        var secondsPerFrame = 1.0 / FrameRateFps;
+        var ffOptions = FFmpegLocator.GetOptions(configuration);
+        var workerCount = int.TryParse(
+            configuration["Processing:PipelineWorkers"], out var w) ? w : 2;
         var minPlayers = mode is VideoMode.Training or VideoMode.FollowCam ? 1 : 2;
 
-        var useGpuYolo = bool.TryParse(configuration["Processing:UseGpuYolo"], out var gy) && gy;
-        Yolo? yolo = null;
+        var probe = await FFProbe.AnalyseAsync(videoPath, cancellationToken: cancellationToken);
+        var videoStream = probe.VideoStreams.FirstOrDefault()
+            ?? throw new InvalidOperationException($"No video stream found in {videoPath}");
 
-        if (useGpuYolo)
-        {
-            try
-            {
-                yolo = new Yolo(new YoloOptions
-                {
-                    ExecutionProvider = new DirectMLExecutionProvider(modelPath)
-                });
-                logger.LogInformation("YOLO running on GPU (DirectML)");
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "DirectML execution provider failed — falling back to CPU");
-            }
-        }
+        var scaledH = ComputeScaledHeight(videoStream.Width, videoStream.Height, 640);
+        var frameSize = 640 * scaledH * 4; // bgra = 4 bytes per pixel
 
-        if (yolo is null)
-        {
-            try
-            {
-                yolo = new Yolo(new YoloOptions
-                {
-                    ExecutionProvider = new CpuExecutionProvider(modelPath)
-                });
-                logger.LogInformation("YOLO running on CPU");
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to initialize YOLO model from {ModelPath}", modelPath);
-                return [];
-            }
-        }
+        logger.LogInformation(
+            "Pipeline: {W}x{H} native → 640x{ScaledH}, workers={Workers}",
+            videoStream.Width, videoStream.Height, scaledH, workerCount);
 
-        using (yolo)
-        {
-            for (int i = 0; i < frameFiles.Count; i++)
-            {
-                var frameTimestamp = i * secondsPerFrame;
-                try
-                {
-                    using var bitmap = SKBitmap.Decode(frameFiles[i]);
-                    if (bitmap is null) continue;
+        var channel = Channel.CreateBounded<(int Index, SKBitmap Frame)>(
+            new BoundedChannelOptions(64) { FullMode = BoundedChannelFullMode.Wait });
 
-                    var detections = yolo.RunObjectDetection(bitmap, confidence: PersonConfidenceThreshold, iou: 0.5f);
-                    var personCount = detections.Count(d => d.Label.Name == "person");
+        var activeTimestamps = new ConcurrentBag<double>();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-                    if (personCount >= minPlayers)
-                        activeTimestamps.Add(frameTimestamp);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Frame {FrameIndex} detection failed, skipping", i);
-                }
-            }
-        }
+        var producerTask = RunProducerAsync(
+            videoPath, scaledH, frameSize, channel.Writer, ffOptions, cts);
 
-        return activeTimestamps;
+        var consumerTasks = Enumerable.Range(0, workerCount)
+            .Select(id => RunConsumerAsync(id, channel.Reader, minPlayers, activeTimestamps, cts))
+            .ToArray();
+
+        await Task.WhenAll(new[] { producerTask }.Concat(consumerTasks));
+
+        return activeTimestamps.OrderBy(t => t).ToList();
     }
 
     private static List<(double StartSeconds, double EndSeconds)> GroupIntoSegments(List<double> activeTimestamps)
