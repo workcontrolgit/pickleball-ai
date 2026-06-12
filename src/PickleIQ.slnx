@@ -3,4 +3,5 @@
   <Project Path="PickleIQ.Core/PickleIQ.Core.csproj" />
   <Project Path="PickleIQ.Infrastructure/PickleIQ.Infrastructure.csproj" />
   <Project Path="PickleIQ.Web/PickleIQ.Web.csproj" />
+  <Project Path="PickleIQ.Tests/PickleIQ.Tests.csproj" />
 </Solution>
