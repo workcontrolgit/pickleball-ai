@@ -151,6 +151,9 @@ public class RallyDetectionService(
         try
         {
             using var proc = Process.Start(psi)!;
+            // Drain stderr concurrently — prevents pipe buffer deadlock on long videos
+            var stderrTask = proc.StandardError.ReadToEndAsync(cts.Token);
+
             var stdout = proc.StandardOutput.BaseStream;
             var buffer = new byte[frameSize];
             var frameIndex = 0;
@@ -163,14 +166,22 @@ public class RallyDetectionService(
                 var bmp = new SKBitmap(new SKImageInfo(640, scaledH, SKColorType.Bgra8888, SKAlphaType.Opaque));
                 Marshal.Copy(buffer, 0, bmp.GetPixels(), frameSize);
 
-                await writer.WriteAsync((frameIndex++, bmp), cts.Token);
+                try
+                {
+                    await writer.WriteAsync((frameIndex++, bmp), cts.Token);
+                }
+                catch
+                {
+                    bmp.Dispose();
+                    throw;
+                }
             }
 
             await proc.WaitForExitAsync(cts.Token);
 
             if (proc.ExitCode != 0)
             {
-                var stderr = await proc.StandardError.ReadToEndAsync(cts.Token);
+                var stderr = await stderrTask;
                 throw new InvalidOperationException(
                     $"FFmpeg exited {proc.ExitCode}: {stderr[..Math.Min(500, stderr.Length)]}");
             }
