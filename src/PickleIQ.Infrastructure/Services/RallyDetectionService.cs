@@ -59,6 +59,12 @@ public class RallyDetectionService(
         }
     }
 
+    internal static int ComputeScaledHeight(int nativeW, int nativeH, int targetW)
+    {
+        var h = (int)Math.Round((double)targetW * nativeH / nativeW);
+        return h % 2 == 0 ? h : h + 1;
+    }
+
     private static async Task ExtractFramesAsync(string videoPath, string outputDir, FFOptions ffOptions, CancellationToken cancellationToken)
     {
         await FFMpegArguments
