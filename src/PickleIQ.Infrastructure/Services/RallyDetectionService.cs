@@ -262,4 +262,77 @@ public class RallyDetectionService(
             writer.Complete();
         }
     }
+
+    private async Task RunConsumerAsync(
+        int workerId,
+        ChannelReader<(int Index, SKBitmap Frame)> reader,
+        int minPlayers,
+        ConcurrentBag<double> activeTimestamps,
+        CancellationTokenSource cts)
+    {
+        var modelPath = configuration["YoloModel:Path"]
+            ?? Path.Combine(AppContext.BaseDirectory, "Models", "yolo26n.onnx");
+
+        var useGpu = workerId == 0
+            && bool.TryParse(configuration["Processing:UseGpuYolo"], out var gy) && gy;
+
+        Yolo? yolo = null;
+
+        if (useGpu)
+        {
+            try
+            {
+                yolo = new Yolo(new YoloOptions
+                {
+                    ExecutionProvider = new DirectMLExecutionProvider(modelPath)
+                });
+                logger.LogInformation("Consumer {WorkerId}: YOLO on GPU (DirectML)", workerId);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Consumer {WorkerId}: DirectML failed, falling back to CPU", workerId);
+            }
+        }
+
+        if (yolo is null)
+        {
+            yolo = new Yolo(new YoloOptions
+            {
+                ExecutionProvider = new CpuExecutionProvider(modelPath)
+            });
+            logger.LogInformation("Consumer {WorkerId}: YOLO on CPU", workerId);
+        }
+
+        using (yolo)
+        {
+            try
+            {
+                await foreach (var (index, frame) in reader.ReadAllAsync(cts.Token))
+                {
+                    using (frame)
+                    {
+                        try
+                        {
+                            var detections = yolo.RunObjectDetection(
+                                frame, confidence: PersonConfidenceThreshold, iou: 0.5f);
+                            var personCount = detections.Count(d => d.Label.Name == "person");
+                            if (personCount >= minPlayers)
+                                activeTimestamps.Add(index * (1.0 / FrameRateFps));
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning(ex,
+                                "Consumer {WorkerId}: frame {Index} detection failed, skipping",
+                                workerId, index);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                cts.Cancel();
+                throw;
+            }
+        }
+    }
 }
