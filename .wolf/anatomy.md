@@ -1,7 +1,7 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-06-12T03:12:40.484Z
-> Files: 63 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-06-12T09:53:00.321Z
+> Files: 64 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
@@ -70,6 +70,7 @@
 
 - `2026-05-30-pm-package-design.md` — PickleIQ PM Package Design (~1556 tok)
 - `2026-06-11-rally-detection-pipeline.md` — Rally Detection Pipeline — Design Spec (~1002 tok)
+- `2026-06-12-cancel-in-progress-job.md` — Cancel In-Progress Job — Design Spec (~600 tok)
 
 ## src/
 
@@ -114,7 +115,7 @@
 - `CoachingFrameSampler.cs` — Class: CoachingFrameSampler (~778 tok)
 - `CoachingStreamService.cs` — Class: CoachingStreamService (~289 tok)
 - `JobStatusService.cs` — Class: JobStatusService, singleton channel-based service for instant job status push to UI (~100 tok)
-- `RallyDetectionService.cs` — In-memory producer-consumer pipeline: FFmpeg bgra pipe → Channel<(int,SKBitmap)> → N parallel Yolo workers; ComputeScaledHeight, RunProducerAsync, RunConsumerAsync, RunDetectionPipelineAsync (~1800 tok)
+- `RallyDetectionService.cs` — Class: RallyDetectionService (~2685 tok)
 - `VideoStorageService.cs` — Class: VideoStorageService (~428 tok)
 
 ## src/PickleIQ.Tests/

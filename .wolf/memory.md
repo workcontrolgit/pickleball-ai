@@ -353,3 +353,19 @@
 | 03:15 | Task 5: wire RunDetectionPipelineAsync, replace DetectRalliesAsync body, remove ExtractFramesAsync+DetectActiveFrames | RallyDetectionService.cs | Build succeeded, 5/5 tests passed, committed 640011b | ~2500 |
 | 23:12 | Edited src/PickleIQ.Web/appsettings.json | 10→11 lines | ~79 |
 | 23:13 | Replaced serial YOLO loop with in-memory producer-consumer pipeline | RallyDetectionService.cs | eliminates temp disk, parallel GPU+CPU workers | ~200 tok |
+| 23:15 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | added error handling | ~377 |
+| 23:15 | Session end: 18 writes across 7 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 22 reads | ~19446 tok |
+| 23:16 | Session end: 18 writes across 7 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 22 reads | ~19446 tok |
+| 05:49 | Session end: 18 writes across 7 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~23592 tok |
+| 05:50 | Session end: 18 writes across 7 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~23592 tok |
+| 05:51 | Session end: 18 writes across 7 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~23592 tok |
+| 05:52 | Session end: 18 writes across 7 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~23592 tok |
+| 05:53 | Created docs/superpowers/specs/2026-06-12-cancel-in-progress-job.md | — | ~640 |
+| 05:55 | Session end: 19 writes across 8 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~24278 tok |
+| 06:05 | Session end: 19 writes across 8 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~24278 tok |
+| 06:09 | Session end: 19 writes across 8 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~24278 tok |
+| 06:10 | Session end: 19 writes across 8 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~24278 tok |
+| 06:10 | Session end: 19 writes across 8 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~24278 tok |
+| 06:11 | Session end: 19 writes across 8 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~24278 tok |
+| 06:13 | Session end: 19 writes across 8 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~24278 tok |
+| 06:14 | Session end: 19 writes across 8 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~24278 tok |
