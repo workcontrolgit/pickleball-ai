@@ -252,8 +252,24 @@ public class RallyDetectionService(
                             var detections = yolo.RunObjectDetection(
                                 frame, confidence: PersonConfidenceThreshold, iou: 0.5f);
                             var personCount = detections.Count(d => d.Label.Name == "person");
-                            if (personCount >= minPlayers)
+                            var isActive = personCount >= minPlayers;
+                            if (isActive)
                                 activeTimestamps.Add(index * (1.0 / FrameRateFps));
+
+                            if (logger.IsEnabled(LogLevel.Debug))
+                            {
+                                var timestamp = index * (1.0 / FrameRateFps);
+                                var labelSummary = detections.Count > 0
+                                    ? string.Join(", ", detections
+                                        .GroupBy(d => d.Label.Name)
+                                        .OrderByDescending(g => g.Count())
+                                        .Select(g => $"{g.Key}×{g.Count()}"))
+                                    : "(none)";
+                                var status = isActive ? "ACTIVE" : $"inactive (min={minPlayers})";
+                                logger.LogDebug(
+                                    "Consumer {WorkerId}: Frame {Index} (t={Timestamp:F1}s) — {Labels} → {Status}",
+                                    workerId, index, timestamp, labelSummary, status);
+                            }
                         }
                         catch (Exception ex)
                         {
