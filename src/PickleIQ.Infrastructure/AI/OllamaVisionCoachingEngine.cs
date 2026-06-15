@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using OllamaSharp;
@@ -20,8 +21,9 @@ public class OllamaVisionCoachingEngine(
         CancellationToken cancellationToken = default)
     {
         var endpoint = configuration["Coaching:Endpoint"] ?? "http://localhost:11434";
-        var model = configuration["Coaching:Model"] ?? "qwen2-vl:7b";
+        var model = configuration["Coaching:Model"] ?? "qwen3-vl:8b";
         var contextWindow = int.TryParse(configuration["Coaching:ContextWindow"], out var cw) ? cw : 4096;
+        var logInteraction = bool.TryParse(configuration["Coaching:LogInteraction"], out var li) && li;
 
         var frameCount = coachingFrames?.Count ?? 0;
         logger.LogInformation(
@@ -33,10 +35,12 @@ public class OllamaVisionCoachingEngine(
             var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10), BaseAddress = new Uri(endpoint) };
             var client = new OllamaApiClient(httpClient, model, null);
 
+            var prompt = BuildPrompt(summary, mode, frameCount);
+
             var message = new Message
             {
                 Role = ChatRole.User,
-                Content = BuildPrompt(summary, mode, frameCount),
+                Content = prompt,
                 Images = frameCount > 0
                     ? coachingFrames!.Select(f => Convert.ToBase64String(f)).ToArray()
                     : null
@@ -50,6 +54,15 @@ public class OllamaVisionCoachingEngine(
                 Stream = true
             };
 
+            if (logInteraction)
+            {
+                var promptPreview = prompt.Length > 200 ? prompt[..200] : prompt;
+                logger.LogInformation(
+                    "Ollama request — model={Model} endpoint={Endpoint} ctx={ContextWindow} frames={FrameCount} prompt={PromptLength} chars | \"{PromptPreview}\"",
+                    model, endpoint, contextWindow, frameCount, prompt.Length, promptPreview);
+            }
+
+            var sw = Stopwatch.StartNew();
             var sb = new System.Text.StringBuilder();
             await foreach (var chunk in client.ChatAsync(request, cancellationToken))
             {
@@ -63,6 +76,16 @@ public class OllamaVisionCoachingEngine(
                         onChunk?.Invoke(cleaned);
                     }
                 }
+            }
+            sw.Stop();
+
+            if (logInteraction)
+            {
+                var response = sb.ToString();
+                var responsePreview = response.Length > 200 ? response[..200] : response;
+                logger.LogInformation(
+                    "Ollama response — {ResponseLength} chars in {ElapsedSeconds:F1}s | \"{ResponsePreview}\"",
+                    response.Length, sw.Elapsed.TotalSeconds, responsePreview);
             }
 
             return sb.ToString();
