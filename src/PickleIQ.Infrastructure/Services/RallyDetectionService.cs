@@ -285,7 +285,31 @@ public class RallyDetectionService(
             logger.LogInformation("Consumer {WorkerId}: YOLO on CPU", workerId);
         }
 
+        // Pose model — optional, graceful fallback if not configured or file missing
+        var posePath = configuration["YoloModel:PosePath"];
+        Yolo? poseYolo = null;
+        if (!string.IsNullOrEmpty(posePath) && File.Exists(posePath))
+        {
+            try
+            {
+                poseYolo = new Yolo(new YoloOptions
+                {
+                    ExecutionProvider = new CpuExecutionProvider(posePath)
+                });
+                logger.LogInformation("Consumer {WorkerId}: Pose model loaded from {PosePath}", workerId, posePath);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Consumer {WorkerId}: Failed to load pose model — falling back to ball+person only", workerId);
+            }
+        }
+        else if (!string.IsNullOrEmpty(posePath))
+        {
+            logger.LogWarning("Consumer {WorkerId}: Pose model not found at {PosePath} — falling back to ball+person only", workerId, posePath);
+        }
+
         using (yolo)
+        using (poseYolo)
         {
             try
             {
@@ -300,7 +324,22 @@ public class RallyDetectionService(
                             var personCount = detections.Count(d => d.Label.Name == "person");
                             var ballDetected = detections.Any(d =>
                                 d.Label.Name == "sports ball" && d.Confidence >= ballConfidenceThreshold);
-                            var isActive = IsFrameActive(personCount, minPlayers, ballDetected);
+
+                            bool isActive;
+                            if (poseYolo is not null)
+                            {
+                                var poses = poseYolo.RunPoseEstimation(frame, confidence: PersonConfidenceThreshold, iou: 0.5f);
+                                var personsKeypoints = poses.Select(p => p.KeyPoints
+                                    .Select(kp => ((float)kp.X, (float)kp.Y, (float)kp.Confidence))
+                                    .ToArray())
+                                    .ToArray();
+                                var anySwinging = AnyPlayerSwinging(personsKeypoints);
+                                isActive = IsFrameActive(personCount, minPlayers, ballDetected, anySwinging);
+                            }
+                            else
+                            {
+                                isActive = IsFrameActive(personCount, minPlayers, ballDetected);
+                            }
                             if (isActive)
                                 activeTimestamps.Add(index * (1.0 / FrameRateFps));
 
@@ -318,7 +357,9 @@ public class RallyDetectionService(
                                     ? "ACTIVE"
                                     : personCount < minPlayers
                                         ? $"inactive (persons={personCount} min={minPlayers})"
-                                        : "inactive (no ball)";
+                                        : !ballDetected
+                                            ? "inactive (no ball)"
+                                            : "inactive (no swing)";
                                 logger.LogDebug(
                                     "Consumer {WorkerId}: Frame {Index} (t={Timestamp:F1}s) — {Labels} | {BallStatus} → {Status}",
                                     workerId, index, timestamp, labelSummary, ballStatus, status);
