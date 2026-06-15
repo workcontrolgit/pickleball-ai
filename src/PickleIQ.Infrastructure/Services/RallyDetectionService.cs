@@ -82,6 +82,12 @@ public class RallyDetectionService(
         return activeTimestamps.OrderBy(t => t).ToList();
     }
 
+    internal static bool IsFrameActive(
+        int personCount,
+        int minPlayers,
+        bool ballDetected)
+        => personCount >= minPlayers && ballDetected;
+
     private static List<(double StartSeconds, double EndSeconds)> GroupIntoSegments(List<double> activeTimestamps)
     {
         if (activeTimestamps.Count == 0) return [];
