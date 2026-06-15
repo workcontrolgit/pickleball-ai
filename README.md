@@ -4,9 +4,9 @@ AI-powered pickleball video analysis. Upload a match video and get back a highli
 
 ## What It Does
 
-1. **Rally detection** — YOLO person detection identifies active rally segments across the match
+1. **Rally detection** — YOLO person + ball detection identifies active rally segments across the match
 2. **Highlight reel** — top segments concatenated into a ~60-second MP4
-3. **Coaching report** — AI-generated markdown report with strengths, improvement areas, and drill recommendations (powered by Ollama + qwen2.5vl running locally with GPU)
+3. **Coaching report** — AI-generated markdown report with strengths, improvement areas, and drill recommendations (powered by Ollama + qwen3-vl running locally with GPU)
 
 ## Tech Stack
 
@@ -17,38 +17,35 @@ AI-powered pickleball video analysis. Upload a match video and get back a highli
 | Background jobs | Hangfire + SQL Server |
 | Database | EF Core + SQL Server Express (LocalDB) |
 | Video processing | FFMpegCore (wraps FFmpeg) |
-| Person detection | YoloDotNet 4.2 + yolo11n ONNX model |
-| AI coaching | OllamaSharp → Ollama (qwen2.5vl:7b vision model) |
+| Person detection | YoloDotNet 4.2 + yolo26n ONNX model |
+| AI coaching | OllamaSharp → Ollama (qwen3-vl:8b vision model) |
 
 ## Prerequisites
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download)
 - [SQL Server Express LocalDB](https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/sql-server-express-localdb) (installed with Visual Studio or standalone)
 - [FFmpeg](https://ffmpeg.org/download.html) — must be on `PATH` or configured via `FFmpeg:BinaryFolder` (see below)
-- [Ollama](https://ollama.com) with `qwen2.5vl:7b` pulled — requires an NVIDIA GPU with 14+ GB VRAM (falls back to a statistical summary if unavailable)
-- NVIDIA GPU with 14+ GB VRAM (tested on 16 GB) for vision inference
+- [Ollama](https://ollama.com) with `qwen3-vl:8b` pulled — requires an NVIDIA GPU with 8+ GB VRAM (falls back to a statistical summary if unavailable)
+- NVIDIA GPU with 8+ GB VRAM (tested on 16 GB)
 
 ```bash
-ollama pull qwen2.5vl:7b
+ollama pull qwen3-vl:8b
 ```
 
 ## YOLO Model
 
-The YOLO model file is not committed. Download `yolo11n.onnx` (opset 17) and place it at:
+The YOLO model file is not committed. Export `yolo26n.onnx` (opset 17) and place it at:
 
 ```
-src/PickleIQ.Infrastructure/Models/yolo11n.onnx
+src/PickleIQ.Infrastructure/Models/yolo26n.onnx
 ```
 
-**Option A — Python export (recommended):**
+**Python export:**
 ```bash
 pip install ultralytics
-python -c "from ultralytics import YOLO; YOLO('yolo11n.pt').export(format='onnx', opset=17)"
-copy yolo11n.onnx src\PickleIQ.Infrastructure\Models\
+python -c "from ultralytics import YOLO; YOLO('yolo26n.pt').export(format='onnx', opset=17)"
+copy yolo26n.onnx src\PickleIQ.Infrastructure\Models\
 ```
-
-**Option B — Direct download:**  
-Download `yolo11n.onnx` from [ultralytics/assets releases](https://github.com/ultralytics/assets/releases).
 
 > If the model file is missing, rally detection falls back gracefully and logs a warning — the pipeline still runs with zero segments detected.
 
@@ -126,25 +123,27 @@ docs/
 | `VideoStorage:BasePath` | `C:/temp/pickleiq/videos` | Where uploaded videos are saved |
 | `VideoStorage:HighlightsPath` | `C:/temp/pickleiq/highlights` | Where highlight reels are written |
 | `Coaching:Endpoint` | `http://localhost:11434` | Ollama server URL |
-| `Coaching:Model` | `qwen2.5vl:7b` | Vision model for coaching reports |
+| `Coaching:Model` | `qwen3-vl:8b` | Vision model for coaching reports |
 | `Coaching:ContextWindow` | `12288` | Token context window (see VRAM table below) |
-| `YoloModel:Path` | `Models/yolo11n.onnx` | Path to ONNX model file (relative to app base) |
+| `YoloModel:Path` | `Models/yolo26n.onnx` | Path to ONNX model file (relative to app base) |
 | `FFmpeg:BinaryFolder` | _(system PATH)_ | Explicit path to FFmpeg `bin` folder — set if `ffmpeg` is not on PATH |
 
 ## Vision Model — Context Window & VRAM
 
-Coaching frames are extracted at 640px wide (3 frames × top 2 rallies = 6 frames per job). Tested on an NVIDIA GPU with 16 GB VRAM running `qwen2.5vl:7b` (Q4_K_M):
+Coaching frames are extracted at 640px wide (3 frames × top 2 rallies = 6 frames per job). `qwen3-vl:8b` (Q4_K_M, 6.1 GB weights) is dramatically more memory-efficient than its predecessor — tested on 16 GB VRAM:
 
-| Context window | VRAM used | Tokens generated | Status |
-|---------------|-----------|-----------------|--------|
-| 4,096 | ~14.5 GB | 2 (blank report) | Too small — images exhaust context |
-| 8,192 | ~12.5 GB | ~415 | Works |
-| **12,288** | **13.17 GB** | **~544** | **Recommended — most output, safe margin** |
-| 16,384 | — | — | GGML assertion error (model architecture limit) |
+| Context window | Est. VRAM | Status |
+|---------------|-----------|--------|
+| 8,192 | ~8–9 GB | Works |
+| 12,288 | ~9–10 GB | Works (default) |
+| **16,384** | **~10–11 GB** | **Works — recommended on 16 GB** |
+| 32,768 | ~11–12 GB | Works with ~4 GB headroom |
 
-`Coaching:ContextWindow` is set to `12288` by default. Lower it if you have less than 16 GB VRAM.
+`Coaching:ContextWindow` defaults to `12288`. On a 16 GB GPU you can safely raise it to `16384` or `32768` for longer coaching reports.
 
-> The prompt tokens for 6 frames at 640px is ~1,850 tokens. At 12,288 context this leaves ~10,400 tokens for the coaching response.
+> qwen3-vl natively supports a 256K-token context window. The practical limit on 16 GB VRAM is VRAM, not the model. GGML assertion errors in qwen3-vl are image-size driven (large/high-res frames), not context-size driven — keep frames at 640px wide to avoid them.
+
+> The prompt tokens for 6 frames at 640px is ~1,850 tokens. At 16,384 context this leaves ~14,500 tokens for the coaching response.
 
 ## Hangfire Dashboard
 
