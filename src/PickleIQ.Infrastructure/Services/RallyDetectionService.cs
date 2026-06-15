@@ -216,6 +216,8 @@ public class RallyDetectionService(
             ?? Path.Combine(AppContext.BaseDirectory, "Models", "yolo26n.onnx");
         var ballConfidenceThreshold = float.TryParse(
             configuration["YoloModel:BallConfidenceThreshold"], out var bt) ? bt : 0.25f;
+        // Note: RunObjectDetection pre-filters at PersonConfidenceThreshold (0.4f),
+        // so BallConfidenceThreshold values below 0.4 have no additional effect.
 
         var useGpu = workerId == 0
             && bool.TryParse(configuration["Processing:UseGpuYolo"], out var gy) && gy;
