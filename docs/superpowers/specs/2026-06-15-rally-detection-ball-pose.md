@@ -111,6 +111,35 @@ If `PosePath` is missing from config or the file does not exist at startup, `Run
 
 ---
 
+---
+
+## Phase 1b: Smarter Frame Sampling
+
+### Goal
+
+With 32K context, the coaching engine can receive ~30 frames. The current sampler takes the top 3 rallies × 3 frames = 9 frames. Raising coverage to 10 rallies × 3 frames = 30 frames gives Ollama a full-match view for positioning and movement analysis.
+
+### Changes
+
+**`CoachingFrameSampler.cs`:**
+- Replace `private const int MaxRallies = 3` with a configurable value read from `Coaching:MaxRallies` (default `10`)
+- Sampling positions per rally unchanged: 25%, 50%, 75% of rally duration
+
+**`src/PickleIQ.Web/appsettings.json` — `Coaching` section:**
+```json
+"Coaching": {
+  "MaxRallies": 10
+}
+```
+
+### No interface changes. No schema changes.
+
+### Token budget at 10 rallies × 3 frames = 30 frames
+
+~300 visual tokens × 30 frames = ~9,000 frame tokens + ~950 prompt tokens = ~9,950 total. Leaves ~22,800 tokens for the coaching response at 32,768 context.
+
+---
+
 ## What Does Not Change
 
 - `FrameRateFps = 2.0` — unchanged
