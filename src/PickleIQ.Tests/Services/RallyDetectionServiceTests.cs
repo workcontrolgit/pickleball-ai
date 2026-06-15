@@ -68,4 +68,74 @@ public class RallyDetectionServiceTests
         Assert.False(RallyDetectionService.IsFrameActive(
             personCount: 2, minPlayers: 2, ballDetected: false));
     }
+
+    // --- IsFrameActive with pose ---
+
+    [Fact]
+    public void IsFrameActive_WithPose_AllConditionsMet_ReturnsTrue()
+    {
+        Assert.True(RallyDetectionService.IsFrameActive(
+            personCount: 2, minPlayers: 2, ballDetected: true, anyPlayerSwinging: true));
+    }
+
+    [Fact]
+    public void IsFrameActive_WithPose_NoSwing_ReturnsFalse()
+    {
+        Assert.False(RallyDetectionService.IsFrameActive(
+            personCount: 2, minPlayers: 2, ballDetected: true, anyPlayerSwinging: false));
+    }
+
+    [Fact]
+    public void IsFrameActive_WithPose_NoBall_ReturnsFalse()
+    {
+        Assert.False(RallyDetectionService.IsFrameActive(
+            personCount: 2, minPlayers: 2, ballDetected: false, anyPlayerSwinging: true));
+    }
+
+    // --- AnyPlayerSwinging ---
+
+    [Fact]
+    public void AnyPlayerSwinging_WristAboveShoulder_ReturnsTrue()
+    {
+        // Image coords: Y increases downward. Wrist above shoulder = smaller Y.
+        var keypoints = new (float X, float Y, float Confidence)[17];
+        keypoints[5] = (100f, 200f, 0.9f);  // left shoulder
+        keypoints[6] = (200f, 210f, 0.9f);  // right shoulder
+        keypoints[9] = (100f, 150f, 0.9f);  // left wrist — above shoulder
+        keypoints[10] = (200f, 230f, 0.9f); // right wrist — below shoulder
+
+        Assert.True(RallyDetectionService.AnyPlayerSwinging(
+            new[] { keypoints }));
+    }
+
+    [Fact]
+    public void AnyPlayerSwinging_WristsBelow_ReturnsFalse()
+    {
+        var keypoints = new (float X, float Y, float Confidence)[17];
+        keypoints[5] = (100f, 200f, 0.9f);  // left shoulder
+        keypoints[6] = (200f, 210f, 0.9f);  // right shoulder
+        keypoints[9] = (100f, 280f, 0.9f);  // left wrist — below shoulder
+        keypoints[10] = (200f, 290f, 0.9f); // right wrist — below shoulder
+
+        Assert.False(RallyDetectionService.AnyPlayerSwinging(
+            new[] { keypoints }));
+    }
+
+    [Fact]
+    public void AnyPlayerSwinging_EmptyList_ReturnsFalse()
+    {
+        Assert.False(RallyDetectionService.AnyPlayerSwinging(
+            Array.Empty<(float X, float Y, float Confidence)[]>()));
+    }
+
+    [Fact]
+    public void AnyPlayerSwinging_LowConfidenceKeypoints_ReturnsFalse()
+    {
+        var keypoints = new (float X, float Y, float Confidence)[17];
+        keypoints[5] = (100f, 200f, 0.1f);  // left shoulder — low confidence
+        keypoints[9] = (100f, 150f, 0.1f);  // left wrist — low confidence
+
+        Assert.False(RallyDetectionService.AnyPlayerSwinging(
+            new[] { keypoints }));
+    }
 }

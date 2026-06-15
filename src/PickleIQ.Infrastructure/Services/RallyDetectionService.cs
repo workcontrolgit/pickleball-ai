@@ -88,6 +88,42 @@ public class RallyDetectionService(
         bool ballDetected)
         => personCount >= minPlayers && ballDetected;
 
+    internal static bool IsFrameActive(
+        int personCount,
+        int minPlayers,
+        bool ballDetected,
+        bool anyPlayerSwinging)
+        => personCount >= minPlayers && ballDetected && anyPlayerSwinging;
+
+    private const float MinKeypointConfidence = 0.5f;
+
+    internal static bool AnyPlayerSwinging(
+        IEnumerable<(float X, float Y, float Confidence)[]> personsKeypoints)
+    {
+        foreach (var kps in personsKeypoints)
+        {
+            if (kps.Length < 11) continue;
+
+            var leftShoulder  = kps[5];
+            var rightShoulder = kps[6];
+            var leftWrist     = kps[9];
+            var rightWrist    = kps[10];
+
+            // Left arm: wrist above shoulder (smaller Y) with sufficient confidence
+            if (leftWrist.Confidence  >= MinKeypointConfidence &&
+                leftShoulder.Confidence >= MinKeypointConfidence &&
+                leftWrist.Y < leftShoulder.Y)
+                return true;
+
+            // Right arm
+            if (rightWrist.Confidence  >= MinKeypointConfidence &&
+                rightShoulder.Confidence >= MinKeypointConfidence &&
+                rightWrist.Y < rightShoulder.Y)
+                return true;
+        }
+        return false;
+    }
+
     private static List<(double StartSeconds, double EndSeconds)> GroupIntoSegments(List<double> activeTimestamps)
     {
         if (activeTimestamps.Count == 0) return [];
