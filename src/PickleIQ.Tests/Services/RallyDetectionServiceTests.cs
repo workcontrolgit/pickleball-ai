@@ -50,13 +50,22 @@ public class RallyDetectionServiceTests
             personCount: 0, minPlayers: 2, ballDetected: false));
     }
 
-    [Fact]
-    public void IsFrameActive_SinglePlayerMode_BallRequired()
+    [Theory]
+    [InlineData(true,  true)]   // ball detected → active
+    [InlineData(false, false)]  // no ball → inactive
+    public void IsFrameActive_SinglePlayerMode_BallRequired(bool ballDetected, bool expected)
     {
         // FollowCam/Training use minPlayers=1
-        Assert.True(RallyDetectionService.IsFrameActive(
-            personCount: 1, minPlayers: 1, ballDetected: true));
+        var result = RallyDetectionService.IsFrameActive(
+            personCount: 1, minPlayers: 1, ballDetected: ballDetected);
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void IsFrameActive_PersonsAtThresholdButNoBall_ReturnsFalse()
+    {
+        // Persons exactly meet threshold but no ball — AND gate must reject
         Assert.False(RallyDetectionService.IsFrameActive(
-            personCount: 1, minPlayers: 1, ballDetected: false));
+            personCount: 2, minPlayers: 2, ballDetected: false));
     }
 }
