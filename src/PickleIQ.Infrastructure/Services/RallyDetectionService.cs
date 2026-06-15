@@ -214,6 +214,8 @@ public class RallyDetectionService(
     {
         var modelPath = configuration["YoloModel:Path"]
             ?? Path.Combine(AppContext.BaseDirectory, "Models", "yolo26n.onnx");
+        var ballConfidenceThreshold = float.TryParse(
+            configuration["YoloModel:BallConfidenceThreshold"], out var bt) ? bt : 0.25f;
 
         var useGpu = workerId == 0
             && bool.TryParse(configuration["Processing:UseGpuYolo"], out var gy) && gy;
@@ -258,7 +260,9 @@ public class RallyDetectionService(
                             var detections = yolo.RunObjectDetection(
                                 frame, confidence: PersonConfidenceThreshold, iou: 0.5f);
                             var personCount = detections.Count(d => d.Label.Name == "person");
-                            var isActive = personCount >= minPlayers;
+                            var ballDetected = detections.Any(d =>
+                                d.Label.Name == "sports ball" && d.Confidence >= ballConfidenceThreshold);
+                            var isActive = IsFrameActive(personCount, minPlayers, ballDetected);
                             if (isActive)
                                 activeTimestamps.Add(index * (1.0 / FrameRateFps));
 
@@ -271,10 +275,15 @@ public class RallyDetectionService(
                                         .OrderByDescending(g => g.Count())
                                         .Select(g => $"{g.Key}×{g.Count()}"))
                                     : "(none)";
-                                var status = isActive ? "ACTIVE" : $"inactive (min={minPlayers})";
+                                var ballStatus = ballDetected ? "ball✓" : "no ball";
+                                var status = isActive
+                                    ? "ACTIVE"
+                                    : personCount < minPlayers
+                                        ? $"inactive (persons={personCount} min={minPlayers})"
+                                        : "inactive (no ball)";
                                 logger.LogDebug(
-                                    "Consumer {WorkerId}: Frame {Index} (t={Timestamp:F1}s) — {Labels} → {Status}",
-                                    workerId, index, timestamp, labelSummary, status);
+                                    "Consumer {WorkerId}: Frame {Index} (t={Timestamp:F1}s) — {Labels} | {BallStatus} → {Status}",
+                                    workerId, index, timestamp, labelSummary, ballStatus, status);
                             }
                         }
                         catch (Exception ex)
