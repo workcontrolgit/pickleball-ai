@@ -20,9 +20,9 @@ public class LoggingCircuitHandler(ILogger<LoggingCircuitHandler> logger) : Circ
         return Task.CompletedTask;
     }
 
-    public override Task OnUnhandledExceptionAsync(Circuit circuit, Exception exception, CancellationToken cancellationToken)
+    public override Task OnCircuitClosedAsync(Circuit circuit, CancellationToken cancellationToken)
     {
-        logger.LogError(exception, "Unhandled exception in Blazor circuit {CircuitId}", circuit.Id);
+        logger.LogDebug("Circuit closed: {CircuitId}", circuit.Id);
         return Task.CompletedTask;
     }
 }
