@@ -2,11 +2,26 @@
 
 > Chronological action log. Hooks and AI append to this file automatically.
 > Old sessions are consolidated by the daemon weekly.
+| 15:08 | Created State Department executive talking points file with 1/5/15-minute brief scripts, leadership Q&A prep, and close statement | c:/temp/mdernization/04-State-Department-Executive-Talking-Points.md | Executive-ready briefing content prepared for leadership sessions | ~1000 |
+| 10:40 | Code review: Phase 2 pose estimation — build clean (0 errors), 19/19 tests pass; implementation approved for merge | RallyDetectionService.cs, RallyDetectionServiceTests.cs, appsettings.json | FINAL: APPROVED | ~600 |
+| 15:00 | Task 2: wired pose estimation YOLO into RunConsumerAsync — optional poseYolo init with graceful fallback, pose-aware IsFrameActive branch, updated debug status string; fixed keypoint type mismatch (int/double → float cast) | RallyDetectionService.cs, appsettings.json | Build OK, 19/19 tests pass, committed | ~800 |
+| 14:42 | Tailored all HR modernization deliverables for State Department context: mission readiness, global workforce support, and domestic/overseas rollout governance | c:/temp/mdernization/01-HR-AI-Modernization-Deck.md, c:/temp/mdernization/02-HR-AI-Modernization-Background.md, c:/temp/mdernization/03-HR-AI-Modernization-Project-Plan.md | Deliverables aligned to State Department mission framing and KPI coverage | ~1200 |
+| 14:30 | TDD Task 1: added IsFrameActive(4-param pose overload) and AnyPlayerSwinging(keypoints) with 7 new unit tests; all 19 tests pass | RallyDetectionService.cs, RallyDetectionServiceTests.cs | committed 474b6e1 | ~400 |
+| 13:12 | Saved formal HR AI modernization project plan in c:/temp/mdernization with phases, milestones, governance, risks, and KPIs | c:/temp/mdernization/03-HR-AI-Modernization-Project-Plan.md | Project plan deliverable added for execution tracking | ~1500 |
+| 13:03 | Created HR modernization slide deck draft and companion background brief in c:/temp/mdernization for immediate presentation use | c:/temp/mdernization/01-HR-AI-Modernization-Deck.md, c:/temp/mdernization/02-HR-AI-Modernization-Background.md | Deliverables created with risk slide content and execution details | ~2800 |
+| 08:49 | Fixed dual-assertion [Fact] to [Theory] and added AND-boundary test in RallyDetectionServiceTests | src/PickleIQ.Tests/Services/RallyDetectionServiceTests.cs | 12 tests pass, committed effc92b | ~300 |
+| 12:55 | Task 2: wired ball detection into RunConsumerAsync — BallConfidenceThreshold in appsettings, ballDetected computed from detections, IsFrameActive called, debug log updated | RallyDetectionService.cs, appsettings.json | 12/12 tests pass, committed 7e42fbc | ~400 |
+| 12:32 | Revised HR AI modernization deck spec to add a dedicated risks-and-mitigations slide for leadership review | docs/superpowers/specs/2026-06-15-hr-ai-modernization-deck-design.md, .wolf/anatomy.md | Deck now treats HR AI risk as first-class content instead of a footnote | ~500 |
+| 12:20 | Wrote HR AI modernization leadership deck spec for mixed HR and IT audience; centered story on business value first, modernization second | docs/superpowers/specs/2026-06-15-hr-ai-modernization-deck-design.md, .wolf/anatomy.md | Spec written and OpenWolf tracking updated | ~2300 |
+| 08:35 | Extracted IsFrameActive static method to RallyDetectionService; wrote 5 unit tests; all 10 tests pass | src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs, src/PickleIQ.Tests/Services/RallyDetectionServiceTests.cs | Committed feat: extract IsFrameActive static method with unit tests | ~1800 |
+| 10:55 | Researched YOLO26n model, YoloDotNet 4.2.0 capabilities, and pickleball-relevant YOLO tasks | web research | YOLO26 is legitimate Ultralytics model (Jan 2026); YoloDotNet supports detection/pose/seg/OBB/classification; no built-in tracking | ~1200 |
+| 06:14 | Added per-frame YOLO detection Debug logging in RunConsumerAsync | RallyDetectionService.cs | committed f838f0c | ~200 |
 | 03:00 | Registered IJobStatusService singleton in Program.cs; rewrote Results.razor @code to replace 5s polling with push via ConsumeStatusAsync + 60s fallback timer | Program.cs, Results.razor | committed a2b9146 | ~800 |
 | Task3 | Created QwenVisionCoachingEngine (vision+stats coaching via Qwen2-VL), deleted OllamaCoachingEngine | QwenVisionCoachingEngine.cs | committed; Program.cs ref pending Task5 | ~600 |
 | Task4 | Registered ICoachingStreamService singleton in Program.cs; updated Results.razor with live streaming via ConsumeStreamAsync + ChannelReader | Program.cs, Results.razor | build succeeded, committed 4e1aa07 | ~400 |
 | CodeReview | Final code review of Qwen2-VL vision coaching engine feature | ICoachingEngine.cs, ICoachingFrameSampler.cs, CoachingFrameSampler.cs, QwenVisionCoachingEngine.cs, VideoProcessingJob.cs | Build passes 0 errors 0 warnings; 2 issues found (TotalMatchSeconds hardcoded 0, finally block deletes tempDir before async reads complete) | ~900 |
 | 16:48 | GPU acceleration: h264_nvenc for FFmpeg (with CPU fallback), CUDA for YOLO (with CPU fallback) | HighlightGenerationService.cs, RallyDetectionService.cs, appsettings.json | build success | ~800 |
+| 00:20 | Added Cancel action for in-progress jobs so stuck "Detecting Rallies" jobs can be cancelled, moved to Failed, then retried or deleted | src/PickleIQ.Web/Components/Pages/Jobs.razor | File diagnostics clean; full build blocked by running process file lock | ~220 |
 | 00:03 | Installed MudBlazor 9.5.0, wired DI/CSS, removed Bootstrap | Program.cs, App.razor, _Imports.razor, app.css, PickleIQ.Web.csproj | Build succeeded, committed | ~800 |
 | 00:31 | Replaced MainLayout + NavMenu with MudBlazor — MudTheme green, MudAppBar top nav, MudAppBar bottom (mobile); MudBottomNavigation removed in v9 so replaced with bottom MudAppBar | MainLayout.razor, NavMenu.razor | Build succeeded 0 errors, committed | ~600 |
 | 09:00 | Removed dead LocationChanged handler from NavMenu.razor; fixed Secondary color (#FFFFFF→#757575) and made _theme readonly in MainLayout.razor | NavMenu.razor, MainLayout.razor | Build succeeded, committed 63d90fc | ~300 |
@@ -210,6 +225,7 @@
 | 08:32 | Edited src/PickleIQ.Web/Components/Pages/Results.razor | 8→8 lines | ~144 |
 | 08:32 | Edited src/PickleIQ.Web/Components/Pages/Results.razor | expanded (+14 lines) | ~129 |
 | 08:40 | Session end: 27 writes across 7 files (Jobs.razor, Results.razor, RallyDetectionService.cs, VideoJob.cs, OllamaVisionCoachingEngine.cs) | 5 reads | ~12448 tok |
+| 00:00 | Switched Ollama vision model to qwen3-vl:8b in engine default and web appsettings (prod + development) | OllamaVisionCoachingEngine.cs, appsettings.json, appsettings.Development.json | Updated and validated with no file errors | ~120 |
 
 ## Session: 2026-06-03 11:36
 
@@ -369,3 +385,148 @@
 | 06:11 | Session end: 19 writes across 8 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~24278 tok |
 | 06:13 | Session end: 19 writes across 8 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~24278 tok |
 | 06:14 | Session end: 19 writes across 8 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 23 reads | ~24278 tok |
+| 10:34 | Session end: 19 writes across 8 files (appsettings.json, 2026-06-11-rally-detection-pipeline.md, PickleIQ.Tests.csproj, PickleIQ.Infrastructure.csproj, PickleIQ.slnx) | 25 reads | ~26104 tok |
+
+## Session: 2026-06-14 16:54
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-06-14 16:54
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-06-14 16:58
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-06-14 16:58
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 17:07 | Created docs/superpowers/specs/2026-06-14-yolo-ollama-interaction-logging.md | — | ~822 |
+| 17:07 | Session end: 1 writes across 1 files (2026-06-14-yolo-ollama-interaction-logging.md) | 5 reads | ~7341 tok |
+| 17:09 | Created docs/superpowers/plans/2026-06-14-yolo-ollama-interaction-logging.md | — | ~2485 |
+| 17:10 | Session end: 2 writes across 1 files (2026-06-14-yolo-ollama-interaction-logging.md) | 6 reads | ~10276 tok |
+| 17:11 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | added 1 condition(s) | ~378 |
+
+## Session: 2026-06-15 05:59
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-06-15 05:59
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 06:01 | Created CLAUDE.md | — | ~891 |
+| 06:01 | Session end: 1 writes across 1 files (CLAUDE.md) | 6 reads | ~5409 tok |
+| 06:07 | Edited CLAUDE.md | 3→7 lines | ~70 |
+| 06:07 | Session end: 2 writes across 1 files (CLAUDE.md) | 6 reads | ~6263 tok |
+| 06:08 | Edited src/PickleIQ.Infrastructure/AI/OllamaVisionCoachingEngine.cs | 7→8 lines | ~65 |
+| 06:09 | Edited src/PickleIQ.Infrastructure/AI/OllamaVisionCoachingEngine.cs | added 2 condition(s) | ~783 |
+| 06:09 | Edited src/PickleIQ.Web/appsettings.json | 5→6 lines | ~42 |
+| 06:09 | Edited src/PickleIQ.Api/Program.cs | inline fix | ~20 |
+| 06:15 | Session end: 6 writes across 4 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs) | 11 reads | ~12210 tok |
+| 06:16 | Edited src/PickleIQ.Web/appsettings.Development.json | 5→8 lines | ~47 |
+| 06:16 | Session end: 7 writes across 5 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 12 reads | ~12257 tok |
+| 06:51 | Edited src/PickleIQ.Web/appsettings.Development.json | inline fix | ~26 |
+| 06:51 | Session end: 8 writes across 5 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 12 reads | ~12283 tok |
+| 06:55 | Session end: 8 writes across 5 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 13 reads | ~12283 tok |
+| 06:57 | Session end: 8 writes across 5 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 13 reads | ~12283 tok |
+| 07:00 | Session end: 8 writes across 5 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 14 reads | ~15243 tok |
+| 07:04 | Session end: 8 writes across 5 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~17213 tok |
+| 07:06 | Session end: 8 writes across 5 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~17213 tok |
+| 07:12 | Session end: 8 writes across 5 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~17213 tok |
+| 07:13 | Session end: 8 writes across 5 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~17213 tok |
+| 07:14 | Session end: 8 writes across 5 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~17213 tok |
+| 07:14 | Session end: 8 writes across 5 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~17213 tok |
+| 07:14 | Session end: 8 writes across 5 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~17213 tok |
+| 07:21 | Created docs/superpowers/specs/2026-06-15-rally-detection-ball-pose.md | — | ~1239 |
+| 07:21 | Session end: 9 writes across 6 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~18540 tok |
+| 07:22 | Session end: 9 writes across 6 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~18540 tok |
+| 07:23 | Session end: 9 writes across 6 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~18540 tok |
+| 07:25 | Session end: 9 writes across 6 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~18540 tok |
+| 07:27 | Session end: 9 writes across 6 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~18540 tok |
+| 07:29 | Edited README.md | 3→3 lines | ~93 |
+| 07:30 | Edited README.md | 2→2 lines | ~34 |
+| 07:30 | Edited README.md | 6→6 lines | ~63 |
+| 07:30 | Edited README.md | 19→16 lines | ~136 |
+| 07:30 | Edited README.md | 3→3 lines | ~67 |
+| 07:30 | Edited README.md | 14→16 lines | ~281 |
+| 07:31 | Session end: 15 writes across 7 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~19260 tok |
+| 07:31 | Edited src/PickleIQ.Web/appsettings.json | 12288 → 32768 | ~8 |
+| 07:31 | Edited src/PickleIQ.Web/appsettings.Development.json | 8→3 lines | ~14 |
+| 07:32 | Session end: 17 writes across 7 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~19282 tok |
+| 07:33 | Session end: 17 writes across 7 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 16 reads | ~19282 tok |
+| 07:34 | Edited docs/superpowers/specs/2026-06-15-rally-detection-ball-pose.md | expanded (+29 lines) | ~251 |
+| 07:36 | Created docs/superpowers/plans/2026-06-15-rally-detection-ball-sampling.md | — | ~3067 |
+| 07:36 | Edited docs/superpowers/plans/2026-06-15-rally-detection-ball-sampling.md | 5→5 lines | ~85 |
+| 07:37 | Created docs/superpowers/plans/2026-06-15-rally-detection-pose.md | — | ~3336 |
+| 07:42 | Session end: 21 writes across 9 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 18 reads | ~28442 tok |
+| 08:28 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | expanded (+6 lines) | ~76 |
+| 08:28 | Created src/PickleIQ.Tests/Services/RallyDetectionServiceTests.cs | — | ~511 |
+| 08:48 | Edited src/PickleIQ.Tests/Services/RallyDetectionServiceTests.cs | modified IsFrameActive_SinglePlayerMode_BallRequired() | ~200 |
+| 08:52 | Edited src/PickleIQ.Web/appsettings.json | 3→4 lines | ~27 |
+| 08:52 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | 4→6 lines | ~85 |
+| 08:52 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | 6→8 lines | ~174 |
+| 08:52 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | 4→9 lines | ~183 |
+| 09:08 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | 4→6 lines | ~93 |
+| 09:18 | Added clarifying comment to RunConsumerAsync showing BallConfidenceThreshold floor at 0.4f (PersonConfidenceThreshold pre-filter) | RallyDetectionService.cs | 12/12 tests pass, committed ec2a4e9 | ~150 |
+| 09:09 | Edited src/PickleIQ.Web/appsettings.json | 6→7 lines | ~48 |
+| 09:09 | Edited src/PickleIQ.Infrastructure/Services/CoachingFrameSampler.cs | modified CoachingFrameSampler() | ~52 |
+| 09:09 | Edited src/PickleIQ.Infrastructure/Services/CoachingFrameSampler.cs | 6→7 lines | ~79 |
+| 09:15 | Task 3: Made MaxRallies configurable — added Coaching:MaxRallies to appsettings.json (default 10), removed hardcoded MaxRallies const, wired config lookup in SampleAsync | CoachingFrameSampler.cs, appsettings.json | Build succeeded 0 errors; 12/12 tests pass; committed 0500109 | ~400 |
+| 09:23 | Edited src/PickleIQ.Web/appsettings.json | 4→4 lines | ~26 |
+| 09:23 | Session end: 33 writes across 12 files (CLAUDE.md, OllamaVisionCoachingEngine.cs, appsettings.json, Program.cs, appsettings.Development.json) | 28 reads | ~38777 tok |
+
+## Session: 2026-06-15 09:27
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 10:25 | Edited src/PickleIQ.Tests/Services/RallyDetectionServiceTests.cs | modified IsFrameActive_PersonsAtThresholdButNoBall_ReturnsFalse() | ~761 |
+| 10:26 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | added 3 condition(s) | ~399 |
+| 10:28 | Edited src/PickleIQ.Web/appsettings.json | 4→5 lines | ~39 |
+| 10:29 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | added error handling | ~356 |
+| 10:29 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | added 1 condition(s) | ~364 |
+| 10:29 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | 5→7 lines | ~120 |
+| 10:29 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | 5→5 lines | ~110 |
+| 10:40 | Session end: 7 writes across 3 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json) | 6 reads | ~8029 tok |
+| 10:41 | Session end: 7 writes across 3 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json) | 6 reads | ~8029 tok |
+| 10:52 | Edited src/PickleIQ.Web/appsettings.Development.json | expanded (+8 lines) | ~128 |
+| 10:52 | Session end: 8 writes across 4 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json, appsettings.Development.json) | 7 reads | ~8296 tok |
+| 10:54 | Edited src/PickleIQ.Web/appsettings.Development.json | 7→8 lines | ~58 |
+| 10:54 | Edited src/PickleIQ.Web/appsettings.Development.json | removed 10 lines | ~14 |
+| 10:54 | Session end: 10 writes across 4 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json, appsettings.Development.json) | 7 reads | ~8417 tok |
+| 10:55 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | 5→10 lines | ~234 |
+| 10:56 | Edited src/PickleIQ.Web/appsettings.Development.json | 4→5 lines | ~71 |
+| 10:56 | Session end: 12 writes across 4 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json, appsettings.Development.json) | 7 reads | ~8738 tok |
+| 10:56 | Session end: 12 writes across 4 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json, appsettings.Development.json) | 7 reads | ~8738 tok |
+| 10:58 | Edited src/PickleIQ.Web/appsettings.Development.json | removed 1 lines | ~6 |
+| 10:58 | Session end: 13 writes across 4 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json, appsettings.Development.json) | 7 reads | ~8744 tok |
+| 11:01 | Session end: 13 writes across 4 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json, appsettings.Development.json) | 7 reads | ~8864 tok |
+| 15:19 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | 3→3 lines | ~39 |
+| 15:19 | Session end: 14 writes across 4 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json, appsettings.Development.json) | 7 reads | ~8906 tok |
+| 15:21 | Edited src/PickleIQ.Infrastructure/Services/RallyDetectionService.cs | 2→2 lines | ~27 |
+| 15:21 | Session end: 15 writes across 4 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json, appsettings.Development.json) | 7 reads | ~8935 tok |
+| 15:22 | Session end: 15 writes across 4 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json, appsettings.Development.json) | 7 reads | ~8935 tok |
+| 15:24 | Session end: 15 writes across 4 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json, appsettings.Development.json) | 7 reads | ~8935 tok |
+| 16:56 | Session end: 15 writes across 4 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json, appsettings.Development.json) | 8 reads | ~10337 tok |
+| 16:57 | Edited src/PickleIQ.Web/Program.cs | added optional chaining | ~187 |
+| 16:58 | Created src/PickleIQ.Web/LoggingCircuitHandler.cs | — | ~283 |
+| 16:58 | Session end: 17 writes across 6 files (RallyDetectionServiceTests.cs, RallyDetectionService.cs, appsettings.json, appsettings.Development.json, Program.cs) | 8 reads | ~10840 tok |
+
+## Session: 2026-06-16 06:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+
+## Session: 2026-06-16 06:56
+
+| Time | Action | File(s) | Outcome | ~Tokens |
+|------|--------|---------|---------|--------|
+| 18:09 | Edited src/PickleIQ.Infrastructure/Services/HighlightGenerationService.cs | 1→4 lines | ~65 |
+| 18:09 | fixed highlight duplicate scenes — sort selected clips chronologically | HighlightGenerationService.cs | one-line fix: OrderBy(Start) | ~800 |
+| 18:09 | Session end: 1 writes across 1 files (HighlightGenerationService.cs) | 7 reads | ~6212 tok |

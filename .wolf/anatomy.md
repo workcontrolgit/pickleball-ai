@@ -1,13 +1,13 @@
 # anatomy.md
 
-> Auto-maintained by OpenWolf. Last scanned: 2026-06-12T09:53:00.321Z
-> Files: 64 tracked | Anatomy hits: 0 | Misses: 0
+> Auto-maintained by OpenWolf. Last scanned: 2026-06-16T22:09:04.140Z
+> Files: 74 tracked | Anatomy hits: 0 | Misses: 0
 
 ## ./
 
 - `.gitignore` — Git ignore rules (~150 tok)
-- `CLAUDE.md` — OpenWolf (~57 tok)
-- `README.md` — Project documentation (~1586 tok)
+- `CLAUDE.md` — CLAUDE.md (~873 tok)
+- `README.md` — Project documentation (~1597 tok)
 
 ## .claude/
 
@@ -65,16 +65,29 @@
 - `2026-06-02-coaching-report-streaming.md` — Coaching Report Streaming Implementation Plan (~6985 tok)
 - `2026-06-02-job-status-push.md` — Job Status Push Implementation Plan (~5116 tok)
 - `2026-06-11-rally-detection-pipeline.md` — Rally Detection Pipeline Implementation Plan (~4615 tok)
+- `2026-06-14-yolo-ollama-interaction-logging.md` — YOLO & Ollama Interaction Logging Implementation Plan (~2329 tok)
+- `2026-06-15-rally-detection-ball-sampling.md` — Rally Detection — Ball Signal + Smarter Frame Sampling Implementation Plan (~2871 tok)
+- `2026-06-15-rally-detection-pose.md` — Rally Detection — Pose Estimation Shot Signal Implementation Plan (~3128 tok)
 
 ## docs/superpowers/specs/
 
 - `2026-05-30-pm-package-design.md` — PickleIQ PM Package Design (~1556 tok)
 - `2026-06-11-rally-detection-pipeline.md` — Rally Detection Pipeline — Design Spec (~1002 tok)
 - `2026-06-12-cancel-in-progress-job.md` — Cancel In-Progress Job — Design Spec (~600 tok)
+- `2026-06-14-yolo-ollama-interaction-logging.md` — YOLO & Ollama Interaction Logging — Design Spec (~771 tok)
+- `2026-06-15-hr-ai-modernization-deck-design.md` — Leadership deck spec for HR AI value, risks, and modernization story (~2500 tok)
+- `2026-06-15-rally-detection-ball-pose.md` — Rally Detection — Ball + Pose Signal Upgrade (~1391 tok)
+
+## external-deliverables/
+
 
 ## src/
 
 - `PickleIQ.slnx` (~88 tok)
+
+## src/PickleIQ.Api/
+
+- `Program.cs` — Class: Program (~381 tok)
 
 ## src/PickleIQ.Core/Entities/
 
@@ -95,7 +108,7 @@
 
 ## src/PickleIQ.Infrastructure/AI/
 
-- `OllamaVisionCoachingEngine.cs` — Class: OllamaVisionCoachingEngine (~2373 tok)
+- `OllamaVisionCoachingEngine.cs` — Class: OllamaVisionCoachingEngine (~2666 tok)
 - `QwenVisionCoachingEngine.cs` — ICoachingEngine impl: sends sampled frames + match stats to Qwen2-VL 7B via OllamaSharp ChatAsync with streaming; fallback markdown on exception (~110 tok)
 
 ## src/PickleIQ.Infrastructure/Data/
@@ -112,10 +125,11 @@
 
 ## src/PickleIQ.Infrastructure/Services/
 
-- `CoachingFrameSampler.cs` — Class: CoachingFrameSampler (~778 tok)
+- `CoachingFrameSampler.cs` — Class: CoachingFrameSampler (~795 tok)
 - `CoachingStreamService.cs` — Class: CoachingStreamService (~289 tok)
+- `HighlightGenerationService.cs` — Class: HighlightGenerationService (~1999 tok)
 - `JobStatusService.cs` — Class: JobStatusService, singleton channel-based service for instant job status push to UI (~100 tok)
-- `RallyDetectionService.cs` — Class: RallyDetectionService (~2685 tok)
+- `RallyDetectionService.cs` — Class: RallyDetectionService (~4246 tok)
 - `VideoStorageService.cs` — Class: VideoStorageService (~428 tok)
 
 ## src/PickleIQ.Tests/
@@ -125,12 +139,14 @@
 
 ## src/PickleIQ.Tests/Services/
 
-- `RallyDetectionServiceTests.cs` — xUnit tests for ComputeScaledHeight (5 theory cases, aspect ratio coverage) (~80 tok)
+- `RallyDetectionServiceTests.cs` — Class: RallyDetectionServiceTests (~1291 tok)
 
 ## src/PickleIQ.Web/
 
-- `appsettings.json` (~273 tok)
-- `Program.cs` — Class: Program (~1402 tok)
+- `appsettings.Development.json` (~176 tok)
+- `appsettings.json` (~312 tok)
+- `LoggingCircuitHandler.cs` — Logs unhandled exceptions that occur inside Blazor Server circuits. These are not caught by the HTTP (~283 tok)
+- `Program.cs` — Class: Program (~1550 tok)
 
 ## src/PickleIQ.Web/Components/Dialogs/
 

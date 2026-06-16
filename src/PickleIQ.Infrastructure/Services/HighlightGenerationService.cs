@@ -45,6 +45,9 @@ public class HighlightGenerationService(
             accumulated += seg.EndSeconds - seg.StartSeconds;
         }
 
+        // Sort chronologically so the highlight plays in temporal order
+        selected = selected.OrderBy(s => s.Start).ToList();
+
         var highlightsPath = configuration["VideoStorage:HighlightsPath"] ?? "C:/temp/pickleiq/highlights";
         Directory.CreateDirectory(highlightsPath);
 
