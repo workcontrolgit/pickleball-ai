@@ -1,23 +1,28 @@
 @using PickleIQ.Core.Entities
 @using MudBlazor
 
-<MudDialogContent>
-    <MudText Typo="Typo.body1" Class="mb-4">
-        Select the new mode. Existing analysis results will be cleared and the video will be reprocessed.
-    </MudText>
-    <MudRadioGroup T="VideoMode" @bind-Value="_mode">
-        <MudRadio Value="VideoMode.Match" Color="Color.Primary">
-            <MudText Typo="Typo.body1"><strong>Match</strong> — requires 2+ players per frame</MudText>
-        </MudRadio>
-        <MudRadio Value="VideoMode.Training" Color="Color.Secondary">
-            <MudText Typo="Typo.body1"><strong>Training</strong> — detects single player per frame</MudText>
-        </MudRadio>
-    </MudRadioGroup>
-</MudDialogContent>
-<MudDialogActions>
-    <MudButton OnClick="Cancel">Cancel</MudButton>
-    <MudButton Color="Color.Warning" Variant="Variant.Filled" OnClick="Confirm">Reprocess</MudButton>
-</MudDialogActions>
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-4">
+            Select the new mode. Existing analysis results will be cleared and the video will be reprocessed.
+        </MudText>
+        <MudRadioGroup T="VideoMode" @bind-Value="_mode">
+            <MudRadio Value="VideoMode.Match" Color="Color.Primary">
+                <MudText Typo="Typo.body1"><strong>Match</strong> — fixed cam, requires 2+ players per frame</MudText>
+            </MudRadio>
+            <MudRadio Value="VideoMode.Training" Color="Color.Secondary">
+                <MudText Typo="Typo.body1"><strong>Training</strong> — solo, singles, or doubles drills</MudText>
+            </MudRadio>
+            <MudRadio Value="VideoMode.FollowCam" Color="Color.Tertiary">
+                <MudText Typo="Typo.body1"><strong>Follow-Cam</strong> — Osmo tracking one player in a match</MudText>
+            </MudRadio>
+        </MudRadioGroup>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Warning" Variant="Variant.Filled" OnClick="Confirm">Reprocess</MudButton>
+    </DialogActions>
+</MudDialog>
 
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;

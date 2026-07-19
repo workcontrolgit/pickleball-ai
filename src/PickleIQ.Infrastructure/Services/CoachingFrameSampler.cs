@@ -9,8 +9,6 @@ public class CoachingFrameSampler(
     IConfiguration configuration,
     ILogger<CoachingFrameSampler> logger) : ICoachingFrameSampler
 {
-    private const int MaxRallies = 3;
-
     public async Task<IReadOnlyList<byte[]>> SampleAsync(
         string videoPath,
         IReadOnlyList<(double StartSeconds, double EndSeconds)> rallies,
@@ -22,9 +20,10 @@ public class CoachingFrameSampler(
 
         try
         {
+            var maxRallies = int.TryParse(configuration["Coaching:MaxRallies"], out var mr) ? mr : 10;
             var topRallies = rallies
                 .OrderByDescending(r => r.EndSeconds - r.StartSeconds)
-                .Take(MaxRallies)
+                .Take(maxRallies)
                 .ToList();
 
             var frames = new List<byte[]>();

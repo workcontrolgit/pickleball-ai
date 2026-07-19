@@ -121,6 +121,7 @@ else
     private readonly HashSet<Guid> _retrying = [];
     private readonly HashSet<Guid> _deleting = [];
     private readonly HashSet<Guid> _retagging = [];
+    private readonly HashSet<Guid> _cancelling = [];
 
     protected override async Task OnInitializedAsync() => await LoadJobsAsync();
 
@@ -201,6 +202,12 @@ else
                        StartIcon="@Icons.Material.Filled.HourglassEmpty">
                 View Progress
             </MudButton>
+            <MudButton OnClick="@(async () => await ConfirmCancelAsync(job.Id, job.FileName))"
+                       Variant="Variant.Outlined" Color="Color.Error" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.Cancel"
+                       Disabled="_cancelling.Contains(job.Id)">
+                @(_cancelling.Contains(job.Id) ? "Cancelling…" : "Cancel")
+            </MudButton>
         }
     };
 
@@ -222,6 +229,16 @@ else
             yesText: "Reprocess", cancelText: "Cancel");
         if (confirmed != true) return;
         await RetryAsync(jobId);
+    }
+
+    private async Task ConfirmCancelAsync(Guid jobId, string fileName)
+    {
+        var confirmed = await DialogService.ShowMessageBoxAsync(
+            "Cancel Processing",
+            $"Cancel processing for \"{fileName}\"? The video file will be kept. You can reprocess it later.",
+            yesText: "Cancel Processing", cancelText: "Keep Waiting");
+        if (confirmed != true) return;
+        await CancelAsync(jobId);
     }
 
     private async Task RetryAsync(Guid jobId)
@@ -272,6 +289,37 @@ else
         await LoadJobsAsync();
     }
 
+    private async Task CancelAsync(Guid jobId)
+    {
+        _cancelling.Add(jobId);
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var job = await Db.VideoJobs.FindAsync(jobId);
+            if (job is null) return;
+
+            if (job.Status == VideoJobStatus.Failed || job.Status == VideoJobStatus.ReportComplete)
+                return;
+
+            Db.RallySegments.RemoveRange(Db.RallySegments.Where(s => s.VideoJobId == jobId));
+            var report = await Db.CoachingReports.FirstOrDefaultAsync(r => r.VideoJobId == jobId);
+            if (report is not null) Db.CoachingReports.Remove(report);
+
+            job.Status = VideoJobStatus.Failed;
+            job.ErrorMessage = "Cancelled by user";
+            job.HighlightFilePath = null;
+            job.CompletedAt = null;
+
+            await Db.SaveChangesAsync();
+        }
+        finally
+        {
+            _cancelling.Remove(jobId);
+            await LoadJobsAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
     private static void DeleteFileIfExists(string? path)
     {
         if (string.IsNullOrEmpty(path)) return;
@@ -299,6 +347,7 @@ else
     private static string ModeLabel(VideoMode mode) => mode switch
     {
         VideoMode.Training => "Training",
+        VideoMode.FollowCam => "Follow-Cam",
         _ => "Match"
     };
 

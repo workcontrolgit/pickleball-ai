@@ -1,5 +1,8 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Threading.Channels;
 using FFMpegCore;
-using FFMpegCore.Enums;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PickleIQ.Core.Entities;
@@ -17,134 +20,108 @@ public class RallyDetectionService(
     ILogger<RallyDetectionService> logger) : IRallyDetectionService
 {
     private const double FrameRateFps = 2.0;
-    private const double MinRallySeconds = 3.0;
-    private const double GapToleranceSeconds = 1.0;
+    private const double MinRallySeconds = 1.5;
+    private const double GapToleranceSeconds = 5.0;
     private const float PersonConfidenceThreshold = 0.4f;
 
     public async Task<IList<(double StartSeconds, double EndSeconds)>> DetectRalliesAsync(
         string videoPath, VideoMode mode = VideoMode.Match, CancellationToken cancellationToken = default)
     {
-        var ffOptions = FFmpegLocator.GetOptions(configuration);
         logger.LogInformation("Starting rally detection for {VideoPath}", videoPath);
 
-        var framesDir = Path.Combine(Path.GetTempPath(), $"pickleiq-frames-{Guid.NewGuid()}");
-        Directory.CreateDirectory(framesDir);
+        var activeTimestamps = await RunDetectionPipelineAsync(videoPath, mode, cancellationToken);
 
-        try
-        {
-            // Extract frames at 2fps
-            await ExtractFramesAsync(videoPath, framesDir, ffOptions, cancellationToken);
+        logger.LogInformation("Active in {Count} frames", activeTimestamps.Count);
 
-            var frameFiles = Directory.GetFiles(framesDir, "*.jpg")
-                .OrderBy(f => f)
-                .ToList();
+        var segments = GroupIntoSegments(activeTimestamps);
 
-            logger.LogInformation("Extracted {Count} frames", frameFiles.Count);
-
-            // Detect players in each frame
-            var modelPath = configuration["YoloModel:Path"]
-                ?? Path.Combine(AppContext.BaseDirectory, "Models", "yolo11n.onnx");
-
-            var activeFrames = DetectActiveFrames(frameFiles, modelPath, mode);
-
-            // Group active frames into rally segments
-            var segments = GroupIntoSegments(activeFrames);
-
-            logger.LogInformation("Detected {Count} rally segments", segments.Count);
-            return segments;
-        }
-        finally
-        {
-            Directory.Delete(framesDir, recursive: true);
-        }
+        logger.LogInformation("Detected {Count} rally segments", segments.Count);
+        return segments;
     }
 
-    private static async Task ExtractFramesAsync(string videoPath, string outputDir, FFOptions ffOptions, CancellationToken cancellationToken)
+    internal static int ComputeScaledHeight(int nativeW, int nativeH, int targetW)
     {
-        await FFMpegArguments
-            .FromFileInput(videoPath)
-            .OutputToFile(
-                Path.Combine(outputDir, "frame-%05d.jpg"),
-                overwrite: true,
-                options => options
-                    .WithVideoFilters(f => f.Scale(640, -2))   // -2 = nearest even number (YOLO requires even dims)
-                    .WithFramerate(FrameRateFps)
-                    .ForceFormat("image2"))
-            .ProcessAsynchronously(true, ffOptions);
+        var h = (int)Math.Round((double)targetW * nativeH / nativeW);
+        return h % 2 == 0 ? h : h + 1;
     }
 
-    private List<double> DetectActiveFrames(List<string> frameFiles, string modelPath, VideoMode mode)
+    private async Task<List<double>> RunDetectionPipelineAsync(
+        string videoPath, VideoMode mode, CancellationToken cancellationToken)
     {
-        if (!File.Exists(modelPath))
+        var ffOptions = FFmpegLocator.GetOptions(configuration);
+        var workerCount = int.TryParse(
+            configuration["Processing:PipelineWorkers"], out var w) ? w : 2;
+        var minPlayers = mode is VideoMode.Training or VideoMode.FollowCam ? 1 : 2;
+
+        var probe = await FFProbe.AnalyseAsync(videoPath, cancellationToken: cancellationToken);
+        var videoStream = probe.VideoStreams.FirstOrDefault()
+            ?? throw new InvalidOperationException($"No video stream found in {videoPath}");
+
+        var scaledH = ComputeScaledHeight(videoStream.Width, videoStream.Height, 640);
+        var frameSize = 640 * scaledH * 4; // bgra = 4 bytes per pixel
+
+        logger.LogInformation(
+            "Pipeline: {W}x{H} native → 640x{ScaledH}, workers={Workers}",
+            videoStream.Width, videoStream.Height, scaledH, workerCount);
+
+        var channel = Channel.CreateBounded<(int Index, SKBitmap Frame)>(
+            new BoundedChannelOptions(64) { FullMode = BoundedChannelFullMode.Wait });
+
+        var activeTimestamps = new ConcurrentBag<double>();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        var producerTask = RunProducerAsync(
+            videoPath, scaledH, frameSize, channel.Writer, ffOptions, cts);
+
+        var consumerTasks = Enumerable.Range(0, workerCount)
+            .Select(id => RunConsumerAsync(id, channel.Reader, minPlayers, activeTimestamps, cts))
+            .ToArray();
+
+        await Task.WhenAll(new[] { producerTask }.Concat(consumerTasks));
+
+        return activeTimestamps.OrderBy(t => t).ToList();
+    }
+
+    internal static bool IsFrameActive(
+        int personCount,
+        int minPlayers,
+        bool ballDetected)
+        => personCount >= minPlayers && ballDetected;
+
+    internal static bool IsFrameActive(
+        int personCount,
+        int minPlayers,
+        bool ballDetected,
+        bool anyPlayerSwinging)
+        => personCount >= minPlayers && ballDetected && anyPlayerSwinging;
+
+    private const float MinKeypointConfidence = 0.5f;
+
+    internal static bool AnyPlayerSwinging(
+        IEnumerable<(float X, float Y, float Confidence)[]> personsKeypoints)
+    {
+        foreach (var kps in personsKeypoints)
         {
-            logger.LogWarning("YOLO model not found at {ModelPath}. Rally detection will return empty results.", modelPath);
-            return [];
+            if (kps.Length < 11) continue;
+
+            var leftShoulder  = kps[5];
+            var rightShoulder = kps[6];
+            var leftWrist     = kps[9];
+            var rightWrist    = kps[10];
+
+            // Left arm: wrist above shoulder (smaller Y) with sufficient confidence
+            if (leftWrist.Confidence  >= MinKeypointConfidence &&
+                leftShoulder.Confidence >= MinKeypointConfidence &&
+                leftWrist.Y < leftShoulder.Y)
+                return true;
+
+            // Right arm
+            if (rightWrist.Confidence  >= MinKeypointConfidence &&
+                rightShoulder.Confidence >= MinKeypointConfidence &&
+                rightWrist.Y < rightShoulder.Y)
+                return true;
         }
-
-        var activeTimestamps = new List<double>();
-        var secondsPerFrame = 1.0 / FrameRateFps;
-        var minPlayers = mode == VideoMode.Training ? 1 : 2;
-
-        var useGpuYolo = bool.TryParse(configuration["Processing:UseGpuYolo"], out var gy) && gy;
-        Yolo? yolo = null;
-
-        if (useGpuYolo)
-        {
-            try
-            {
-                yolo = new Yolo(new YoloOptions
-                {
-                    ExecutionProvider = new DirectMLExecutionProvider(modelPath)
-                });
-                logger.LogInformation("YOLO running on GPU (DirectML)");
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "DirectML execution provider failed — falling back to CPU");
-            }
-        }
-
-        if (yolo is null)
-        {
-            try
-            {
-                yolo = new Yolo(new YoloOptions
-                {
-                    ExecutionProvider = new CpuExecutionProvider(modelPath)
-                });
-                logger.LogInformation("YOLO running on CPU");
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to initialize YOLO model from {ModelPath}", modelPath);
-                return [];
-            }
-        }
-
-        using (yolo)
-        {
-            for (int i = 0; i < frameFiles.Count; i++)
-            {
-                var frameTimestamp = i * secondsPerFrame;
-                try
-                {
-                    using var bitmap = SKBitmap.Decode(frameFiles[i]);
-                    if (bitmap is null) continue;
-
-                    var detections = yolo.RunObjectDetection(bitmap, confidence: PersonConfidenceThreshold, iou: 0.5f);
-                    var personCount = detections.Count(d => d.Label.Name == "person");
-
-                    if (personCount >= minPlayers)
-                        activeTimestamps.Add(frameTimestamp);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Frame {FrameIndex} detection failed, skipping", i);
-                }
-            }
-        }
-
-        return activeTimestamps;
+        return false;
     }
 
     private static List<(double StartSeconds, double EndSeconds)> GroupIntoSegments(List<double> activeTimestamps)
@@ -175,5 +152,238 @@ public class RallyDetectionService(
             segments.Add((segStart, segEnd));
 
         return segments;
+    }
+
+    private static async ValueTask<int> ReadExactAsync(
+        Stream stream, byte[] buffer, int count, CancellationToken ct)
+    {
+        int totalRead = 0;
+        while (totalRead < count)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(totalRead, count - totalRead), ct);
+            if (read == 0) break;
+            totalRead += read;
+        }
+        return totalRead;
+    }
+
+    private async Task RunProducerAsync(
+        string videoPath,
+        int scaledH,
+        int frameSize,
+        ChannelWriter<(int Index, SKBitmap Frame)> writer,
+        FFOptions ffOptions,
+        CancellationTokenSource cts)
+    {
+        var ffmpegExe = Path.Combine(ffOptions.BinaryFolder ?? "", "ffmpeg.exe");
+        if (!File.Exists(ffmpegExe)) ffmpegExe = "ffmpeg";
+
+        var args = $"-y -i \"{videoPath.Replace("\\", "/")}\" " +
+                   $"-vf scale=640:{scaledH},fps={FrameRateFps} " +
+                   $"-f rawvideo -pix_fmt bgra pipe:1";
+
+        var psi = new ProcessStartInfo(ffmpegExe, args)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        try
+        {
+            using var proc = Process.Start(psi)!;
+            // Drain stderr concurrently — prevents pipe buffer deadlock on long videos
+            var stderrTask = proc.StandardError.ReadToEndAsync(cts.Token);
+
+            var stdout = proc.StandardOutput.BaseStream;
+            var buffer = new byte[frameSize];
+            var frameIndex = 0;
+
+            while (true)
+            {
+                var bytesRead = await ReadExactAsync(stdout, buffer, frameSize, cts.Token);
+                if (bytesRead < frameSize) break;
+
+                var bmp = new SKBitmap(new SKImageInfo(640, scaledH, SKColorType.Bgra8888, SKAlphaType.Opaque));
+                Marshal.Copy(buffer, 0, bmp.GetPixels(), frameSize);
+
+                try
+                {
+                    await writer.WriteAsync((frameIndex++, bmp), cts.Token);
+                }
+                catch
+                {
+                    bmp.Dispose();
+                    throw;
+                }
+            }
+
+            await proc.WaitForExitAsync(cts.Token);
+
+            if (proc.ExitCode != 0)
+            {
+                var stderr = await stderrTask;
+                throw new InvalidOperationException(
+                    $"FFmpeg exited {proc.ExitCode}: {stderr[..Math.Min(500, stderr.Length)]}");
+            }
+
+            logger.LogInformation("Producer: streamed {Count} frames", frameIndex);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            cts.Cancel();
+            throw;
+        }
+        finally
+        {
+            writer.Complete();
+        }
+    }
+
+    private async Task RunConsumerAsync(
+        int workerId,
+        ChannelReader<(int Index, SKBitmap Frame)> reader,
+        int minPlayers,
+        ConcurrentBag<double> activeTimestamps,
+        CancellationTokenSource cts)
+    {
+        var modelPath = configuration["YoloModel:Path"]
+            ?? Path.Combine(AppContext.BaseDirectory, "Models", "yolo26n.onnx");
+        var ballConfidenceThreshold = float.TryParse(
+            configuration["YoloModel:BallConfidenceThreshold"], out var bt) ? bt : 0.25f;
+        // Note: RunObjectDetection pre-filters at PersonConfidenceThreshold (0.4f),
+        // so BallConfidenceThreshold values below 0.4 have no additional effect.
+
+        var useGpu = workerId == 0
+            && bool.TryParse(configuration["Processing:UseGpuYolo"], out var gy) && gy;
+
+        Yolo? yolo = null;
+
+        if (useGpu)
+        {
+            try
+            {
+                yolo = new Yolo(new YoloOptions
+                {
+                    ExecutionProvider = new DirectMLExecutionProvider(modelPath)
+                });
+                logger.LogInformation("Consumer {WorkerId}: YOLO on GPU (DirectML)", workerId);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Consumer {WorkerId}: DirectML failed, falling back to CPU", workerId);
+            }
+        }
+
+        if (yolo is null)
+        {
+            yolo = new Yolo(new YoloOptions
+            {
+                ExecutionProvider = new CpuExecutionProvider(modelPath)
+            });
+            logger.LogInformation("Consumer {WorkerId}: YOLO on CPU", workerId);
+        }
+
+        // Pose model — optional, graceful fallback if not configured or file missing
+        var posePath = configuration["YoloModel:PosePath"];
+        Yolo? poseYolo = null;
+        if (!string.IsNullOrEmpty(posePath) && File.Exists(posePath))
+        {
+            try
+            {
+                poseYolo = new Yolo(new YoloOptions
+                {
+                    ExecutionProvider = new CpuExecutionProvider(posePath)
+                });
+                logger.LogInformation("Consumer {WorkerId}: Pose model loaded from {PosePath}", workerId, posePath);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Consumer {WorkerId}: Failed to load pose model — falling back to ball+person only", workerId);
+            }
+        }
+        else if (!string.IsNullOrEmpty(posePath))
+        {
+            logger.LogWarning("Consumer {WorkerId}: Pose model not found at {PosePath} — falling back to ball+person only", workerId, posePath);
+        }
+
+        using (yolo)
+        using (poseYolo)
+        {
+            try
+            {
+                await foreach (var (index, frame) in reader.ReadAllAsync(cts.Token))
+                {
+                    using (frame)
+                    {
+                        try
+                        {
+                            // Use ballConfidenceThreshold as the detection floor so low-confidence
+                            // ball detections are not pre-filtered out; persons are re-filtered at
+                            // PersonConfidenceThreshold separately.
+                            var detectionFloor = Math.Min(ballConfidenceThreshold, PersonConfidenceThreshold);
+                            var detections = yolo.RunObjectDetection(
+                                frame, confidence: detectionFloor, iou: 0.5f);
+                            var personCount = detections.Count(d =>
+                                d.Label.Name == "person" && d.Confidence >= PersonConfidenceThreshold);
+                            var ballDetected = detections.Any(d =>
+                                d.Label.Name == "sports ball" && d.Confidence >= ballConfidenceThreshold);
+
+                            bool isActive;
+                            if (poseYolo is not null)
+                            {
+                                var poses = poseYolo.RunPoseEstimation(frame, confidence: PersonConfidenceThreshold, iou: 0.5f);
+                                var personsKeypoints = poses.Select(p => p.KeyPoints
+                                    .Select(kp => ((float)kp.X, (float)kp.Y, (float)kp.Confidence))
+                                    .ToArray())
+                                    .ToArray();
+                                var anySwinging = AnyPlayerSwinging(personsKeypoints);
+                                isActive = IsFrameActive(personCount, minPlayers, ballDetected, anySwinging);
+                            }
+                            else
+                            {
+                                isActive = IsFrameActive(personCount, minPlayers, ballDetected);
+                            }
+                            if (isActive)
+                                activeTimestamps.Add(index * (1.0 / FrameRateFps));
+
+                            if (logger.IsEnabled(LogLevel.Debug))
+                            {
+                                var timestamp = index * (1.0 / FrameRateFps);
+                                var labelSummary = detections.Count > 0
+                                    ? string.Join(", ", detections
+                                        .GroupBy(d => d.Label.Name)
+                                        .OrderByDescending(g => g.Count())
+                                        .Select(g => $"{g.Key}×{g.Count()}"))
+                                    : "(none)";
+                                var ballStatus = ballDetected ? "ball✓" : "no ball";
+                                var status = isActive
+                                    ? "ACTIVE"
+                                    : personCount < minPlayers
+                                        ? $"inactive (persons={personCount} min={minPlayers})"
+                                        : !ballDetected
+                                            ? "inactive (no ball)"
+                                            : "inactive (no swing)";
+                                logger.LogDebug(
+                                    "Consumer {WorkerId}: Frame {Index} (t={Timestamp:F1}s) — {Labels} | {BallStatus} → {Status}",
+                                    workerId, index, timestamp, labelSummary, ballStatus, status);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning(ex,
+                                "Consumer {WorkerId}: frame {Index} detection failed, skipping",
+                                workerId, index);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                cts.Cancel();
+                throw;
+            }
+        }
     }
 }

@@ -19,12 +19,10 @@
 <PageTitle>Results — PickleIQ</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
-    <MudText Typo="Typo.h4">@(_job?.Mode == VideoMode.Training ? "Training Results" : "Match Results")</MudText>
+    <MudText Typo="Typo.h4">@PageTitle(_job?.Mode)</MudText>
     @if (_job is not null)
     {
-        <MudChip T="string" Color="Color.Default" Size="Size.Small">
-            @(_job.Mode == VideoMode.Training ? "Training" : "Match")
-        </MudChip>
+        <MudChip T="string" Color="Color.Default" Size="Size.Small">@ModeLabel(_job.Mode)</MudChip>
     }
 </MudStack>
 
@@ -81,7 +79,7 @@ else
         <MudItem xs="12" sm="4">
             <MudPaper Elevation="2" Class="pa-4 text-center">
                 <MudText Typo="Typo.h3" Color="Color.Primary">@_segments.Count</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">@(_job.Mode == VideoMode.Training ? "Active Segments" : "Rallies Detected")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@(_job.Mode == VideoMode.Training ? "Active Segments" : "Rallies")</MudText>
             </MudPaper>
         </MudItem>
         <MudItem xs="12" sm="4">
@@ -303,6 +301,20 @@ else
         < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
         < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
         _ => $"{bytes / (1024.0 * 1024 * 1024):F2} GB"
+    };
+
+    private static string ModeLabel(VideoMode mode) => mode switch
+    {
+        VideoMode.Training => "Training",
+        VideoMode.FollowCam => "Follow-Cam",
+        _ => "Match"
+    };
+
+    private static string PageTitle(VideoMode? mode) => mode switch
+    {
+        VideoMode.Training => "Training Results",
+        VideoMode.FollowCam => "Follow-Cam Results",
+        _ => "Match Results"
     };
 
     private static string StatusMessage(VideoJobStatus status) => status switch

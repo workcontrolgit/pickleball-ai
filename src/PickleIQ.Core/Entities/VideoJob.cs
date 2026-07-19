@@ -3,7 +3,8 @@ namespace PickleIQ.Core.Entities;
 public enum VideoMode
 {
     Match,
-    Training
+    Training,
+    FollowCam
 }
 
 public enum VideoJobStatus

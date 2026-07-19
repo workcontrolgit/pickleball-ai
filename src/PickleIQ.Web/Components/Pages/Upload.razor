@@ -18,20 +18,32 @@
     @if (!_uploading)
     {
         <MudRadioGroup T="VideoMode" @bind-Value="_selectedMode" Class="mb-4">
-            <MudStack Row="true" Spacing="3">
-                <MudRadio Value="VideoMode.Match" Color="Color.Primary">
-                    <MudStack Spacing="0">
-                        <MudText Typo="Typo.body1"><strong>Match</strong></MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Doubles or singles game</MudText>
-                    </MudStack>
-                </MudRadio>
-                <MudRadio Value="VideoMode.Training" Color="Color.Secondary">
-                    <MudStack Spacing="0">
-                        <MudText Typo="Typo.body1"><strong>Training</strong></MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">Solo drill or practice session</MudText>
-                    </MudStack>
-                </MudRadio>
-            </MudStack>
+            <div style="display:flex; flex-wrap:wrap; gap:12px;">
+                <div style="flex:1; min-width:120px; overflow:hidden;">
+                    <MudRadio Value="VideoMode.Match" Color="Color.Primary" Style="width:100%;">
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.body1"><strong>Match</strong></MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Fixed cam, 2–4 players</MudText>
+                        </MudStack>
+                    </MudRadio>
+                </div>
+                <div style="flex:1; min-width:120px; overflow:hidden;">
+                    <MudRadio Value="VideoMode.Training" Color="Color.Secondary" Style="width:100%;">
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.body1"><strong>Training</strong></MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Solo, singles, or doubles drills</MudText>
+                        </MudStack>
+                    </MudRadio>
+                </div>
+                <div style="flex:1; min-width:160px; overflow:hidden;">
+                    <MudRadio Value="VideoMode.FollowCam" Color="Color.Tertiary" Style="width:100%;">
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.body1"><strong>Follow-Cam</strong></MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Osmo tracking one player in a match</MudText>
+                        </MudStack>
+                    </MudRadio>
+                </div>
+            </div>
         </MudRadioGroup>
         @* Hidden native file input — Blazor reads files from this *@
         <InputFile id="upload-input" style="display:none"
@@ -99,11 +111,15 @@
     private string? _errorMessage;
     private DotNetObjectReference<Upload>? _dotNetRef;
 
+    protected override void OnInitialized()
+    {
+        _maxFileSizeGb = Configuration.GetValue<long>("Upload:MaxFileSizeGb", 12);
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            _maxFileSizeGb = Configuration.GetValue<long>("Upload:MaxFileSizeGb", 12);
             _dotNetRef = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("initUploadDropZone", "upload-drop-zone", "upload-input", _dotNetRef);
         }
