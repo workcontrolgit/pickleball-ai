@@ -98,7 +98,20 @@ try
 
     if (!app.Environment.IsDevelopment())
     {
-        app.UseExceptionHandler("/Error", createScopeForErrors: true);
+        app.UseExceptionHandler(errorApp =>
+        {
+            errorApp.Run(async context =>
+            {
+                var exFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>();
+                if (exFeature?.Error is not null)
+                {
+                    var logger = context.RequestServices
+                        .GetRequiredService<ILogger<Program>>();
+                    logger.LogError(exFeature.Error, "Unhandled exception on {Path}", context.Request.Path);
+                }
+                context.Response.Redirect("/Error");
+            });
+        });
         app.UseHsts();
     }
 

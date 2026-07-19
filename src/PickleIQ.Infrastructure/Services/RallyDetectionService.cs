@@ -20,8 +20,8 @@ public class RallyDetectionService(
     ILogger<RallyDetectionService> logger) : IRallyDetectionService
 {
     private const double FrameRateFps = 2.0;
-    private const double MinRallySeconds = 3.0;
-    private const double GapToleranceSeconds = 1.0;
+    private const double MinRallySeconds = 1.5;
+    private const double GapToleranceSeconds = 5.0;
     private const float PersonConfidenceThreshold = 0.4f;
 
     public async Task<IList<(double StartSeconds, double EndSeconds)>> DetectRalliesAsync(
@@ -319,9 +319,14 @@ public class RallyDetectionService(
                     {
                         try
                         {
+                            // Use ballConfidenceThreshold as the detection floor so low-confidence
+                            // ball detections are not pre-filtered out; persons are re-filtered at
+                            // PersonConfidenceThreshold separately.
+                            var detectionFloor = Math.Min(ballConfidenceThreshold, PersonConfidenceThreshold);
                             var detections = yolo.RunObjectDetection(
-                                frame, confidence: PersonConfidenceThreshold, iou: 0.5f);
-                            var personCount = detections.Count(d => d.Label.Name == "person");
+                                frame, confidence: detectionFloor, iou: 0.5f);
+                            var personCount = detections.Count(d =>
+                                d.Label.Name == "person" && d.Confidence >= PersonConfidenceThreshold);
                             var ballDetected = detections.Any(d =>
                                 d.Label.Name == "sports ball" && d.Confidence >= ballConfidenceThreshold);
 
